@@ -1,0 +1,91 @@
+using UdonSharp;
+using UnityEngine;
+
+namespace CreatureAI
+{
+    /// <summary>
+    /// 1 匹の猫の「まとめ役」(仕様 3.1節 / 4章)。
+    ///
+    /// [役割]
+    ///   ① 兄弟コンポーネントの参照を起動時に 1 回だけ GetComponent で収集する。
+    ///   ② 稼働 Registry の選出状況を確認する(選出そのものは Registry.Start が行う)。
+    ///   ③ 単一のタイマーループ(OnCoreTick)で各層を定期実行する。
+    ///
+    /// 判断・行動ロジックは一切持たない。「誰がいつ動くか」だけを 1 本の
+    /// SendCustomEventDelayedSeconds ループに集約することで、猫が増えても
+    /// 「1 匹につきタイマー 1 本」で済む(大量のタイマーが並走しない)。
+    ///
+    /// Phase 1 で存在するのは needsController / pointSensor / profile / registry のみ。
+    /// 他層(playerSensor・decisionMaker・threatEvaluator・actionRunner・locomotion・
+    /// animator・relationshipManager)は各フェーズで追加する。
+    /// </summary>
+    public class CreatureCore : UdonSharpBehaviour
+    {
+        [Header("Tick 設定")]
+        [Tooltip("メインループの間隔(秒)。")]
+        public float tickInterval = 0.2f;
+
+        [Tooltip("起動時にこの秒数までのランダム遅延を入れ、多数の猫の Tick 位相をばらす。")]
+        public float startupJitter = 0.2f;
+
+        // --- 兄弟コンポーネント参照(仕様 3.1「公開参照」/ Phase 1 で存在する分) ---
+        [HideInInspector] public NeedsController needsController;
+        [HideInInspector] public CreaturePointSensor pointSensor;
+        [HideInInspector] public CreatureProfile profile;
+
+        // このネコが同梱する Registry(選出結果の確認・タイムアウト掃除に使う)。
+        private CreaturePointRegistry localRegistry;
+
+        private int tickCounter = 0;
+
+        void Start()
+        {
+            // ① 参照キャッシュ(GetComponent は起動時の 1 回だけ)。
+            needsController = GetComponent<NeedsController>();
+            pointSensor = GetComponent<CreaturePointSensor>();
+            profile = GetComponentInChildren<CreatureProfile>();
+            localRegistry = GetComponentInChildren<CreaturePointRegistry>();
+
+            // ② 依存注入 & 選出状況の確認ログ。
+            if (needsController != null) needsController.Initialize(profile);
+
+            if (profile == null)
+                Debug.LogWarning("[CreatureCore] Profile が見つかりません。子オブジェクト 'Profile' に " +
+                    "CreatureProfile を付けてください: " + name);
+
+            if (localRegistry != null)
+                Debug.Log("[CreatureCore] " + name + " 起動。この個体の Registry singleton = " +
+                    localRegistry.IsActiveSingleton());
+
+            // ③ タイマーループ開始(起動時ジッタを入れて位相をばらす)。
+            SendCustomEventDelayedSeconds(nameof(OnCoreTick), Random.Range(0f, startupJitter));
+        }
+
+        /// <summary>
+        /// 単一タイマーループ本体(仕様 4章)。各層を頻度分けで呼び、末尾で自分を再予約する。
+        /// public でなければ SendCustomEventDelayedSeconds から呼べない点に注意。
+        /// </summary>
+        public void OnCoreTick()
+        {
+            tickCounter++;
+
+            // 中頻度: 近傍候補の更新(Sensor 側でも間隔スロットリングされる)。
+            if (pointSensor != null) pointSensor.RefreshIfNeeded();
+            // Phase 2+: threatEvaluator.Check();
+
+            // 低頻度: 欲求増加。
+            if (tickCounter % 5 == 0 && needsController != null) needsController.GrowNeeds();
+            // Phase 2+: if (tickCounter % 5 == 0) decisionMaker.Evaluate();
+
+            // より低頻度: 占有タイムアウトの掃除(安全網 / 仕様 3.5節)。
+            if (tickCounter % 10 == 0 && localRegistry != null && profile != null)
+                localRegistry.CleanupExpiredReservations(profile.reserveTimeout);
+            // Phase 3+: if (tickCounter % 10 == 0) relationshipManager.Update();
+
+            // Phase 2+: actionRunner.Tick();   // 行動実行だけは毎 Tick 動かす
+
+            // 次の Tick を予約(1 匹 = タイマー 1 本)。
+            SendCustomEventDelayedSeconds(nameof(OnCoreTick), tickInterval);
+        }
+    }
+}
