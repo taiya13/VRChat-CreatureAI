@@ -19,25 +19,21 @@ namespace CreatureAI
         [Tooltip("状態を読み取る対象の CreaturePoint。")]
         public CreaturePoint point;
 
-        private readonly Color freeColor = new Color(0.4f, 1f, 0.5f);
-        private readonly Color reservedColor = new Color(1f, 0.85f, 0.25f);
-        private readonly Color occupiedColor = new Color(1f, 0.4f, 0.4f);
-
         void Update()
         {
             if (targetText == null || point == null) return;
 
             PointOccupancy occ = point.GetOccupancy();
 
+            // 色は UI.Text.color の setter(Udon 非対応の可能性)を避け、リッチテキストで埋め込む。
             string state;
-            Color col;
-            if (occ == PointOccupancy.Occupied) { state = "Occupied"; col = occupiedColor; }
-            else if (occ == PointOccupancy.Reserved) { state = "Reserved"; col = reservedColor; }
-            else { state = "Free"; col = freeColor; }
+            string hex;
+            if (occ == PointOccupancy.Occupied) { state = "Occupied"; hex = "FF6666"; }
+            else if (occ == PointOccupancy.Reserved) { state = "Reserved"; hex = "FFD940"; }
+            else { state = "Free"; hex = "7CFF7C"; }
 
             string suffix = (occ != PointOccupancy.Free) ? ("\nby " + point.GetHolderName()) : "";
-            targetText.text = point.name + "\n<b>" + state + "</b>" + suffix;
-            targetText.color = col;
+            targetText.text = point.name + "\n<color=#" + hex + "><b>" + state + "</b></color>" + suffix;
         }
     }
 }
