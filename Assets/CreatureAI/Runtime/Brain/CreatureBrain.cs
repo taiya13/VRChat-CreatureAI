@@ -27,6 +27,10 @@ namespace CreatureAI
 
         private Goal currentGoal = Goal.None;
 
+        // 直近の判断根拠(デバッグ表示が参照する)。
+        private NeedType lastBestNeed = NeedType.Hunger;
+        private float lastBestScore = 0f;
+
         /// <summary>CreatureCore.Start から依存を注入する。</summary>
         public void Initialize(NeedsData data, CreatureProfile creatureProfile)
         {
@@ -57,6 +61,9 @@ namespace CreatureAI
                 }
             }
 
+            lastBestNeed = best;
+            lastBestScore = bestScore;
+
             Goal newGoal = (bestScore > activationThreshold) ? GoalForNeed(best) : Goal.None;
 
             if (newGoal != currentGoal)
@@ -72,6 +79,25 @@ namespace CreatureAI
 
         /// <summary>現在の Goal を表示用の文字列で返す(状態表示 UI 等が使う)。</summary>
         public string GetCurrentGoalName() { return GoalName(currentGoal); }
+
+        /// <summary>直近で最優先だった Need の名前(判断根拠の表示用)。</summary>
+        public string GetTopNeedName() { return NeedName(lastBestNeed); }
+
+        /// <summary>直近で最優先だった Need のスコア(値×重み)。</summary>
+        public float GetTopScore() { return lastBestScore; }
+
+        private string NeedName(NeedType t)
+        {
+            switch (t)
+            {
+                case NeedType.Hunger: return "Hunger";
+                case NeedType.Sleepiness: return "Sleepiness";
+                case NeedType.Thirst: return "Thirst";
+                case NeedType.Playfulness: return "Playfulness";
+                case NeedType.Affection: return "Affection";
+                default: return "?";
+            }
+        }
 
         // ================= 拡張ポイント =================
 

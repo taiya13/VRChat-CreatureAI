@@ -58,7 +58,7 @@ namespace CreatureAI
             if (needsController != null) needsController.Initialize(profile, needsData);
             if (brain != null) brain.Initialize(needsData, profile);
             if (targetSelector != null) targetSelector.Initialize(brain, pointSensor);
-            if (statusDisplay != null) statusDisplay.Initialize(needsData, brain, targetSelector);
+            if (statusDisplay != null) statusDisplay.Initialize(needsData, brain, targetSelector, pointSensor);
 
             if (profile == null)
                 Debug.LogWarning("[CreatureCore] Profile が見つかりません。子オブジェクト 'Profile' に " +

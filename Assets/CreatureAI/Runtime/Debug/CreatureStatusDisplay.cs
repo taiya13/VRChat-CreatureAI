@@ -26,12 +26,15 @@ namespace CreatureAI
         private NeedsData needsData;
         private CreatureBrain brain;
         private CreatureTargetSelector targetSelector;
+        private CreaturePointSensor sensor;
 
-        public void Initialize(NeedsData data, CreatureBrain creatureBrain, CreatureTargetSelector selector)
+        public void Initialize(NeedsData data, CreatureBrain creatureBrain,
+            CreatureTargetSelector selector, CreaturePointSensor pointSensor)
         {
             needsData = data;
             brain = creatureBrain;
             targetSelector = selector;
+            sensor = pointSensor;
         }
 
         /// <summary>CreatureCore の Tick から毎回呼ばれ、Text を最新状態に更新する。</summary>
@@ -41,14 +44,21 @@ namespace CreatureAI
 
             string goal = (brain != null) ? brain.GetCurrentGoalName() : "-";
             string target = (targetSelector != null) ? targetSelector.GetTargetPointName() : "-";
+            int cands = (sensor != null) ? sensor.GetCandidateCount() : 0;
+
+            // 判断根拠: 最優先 Need とそのスコア(値×重み)。
+            string reason = "-";
+            if (brain != null)
+                reason = brain.GetTopNeedName() + " " + Round1(brain.GetTopScore());
 
             float hunger = (needsData != null) ? needsData.GetValue(NeedType.Hunger) : 0f;
             float sleep = (needsData != null) ? needsData.GetValue(NeedType.Sleepiness) : 0f;
 
             string s =
                 "<b>" + displayName + "</b>\n" +
-                "Goal   : " + goal + "\n" +
+                "Goal   : " + goal + "   (top: " + reason + ")\n" +
                 "Target : " + target + "\n" +
+                "Cands  : " + cands + "\n" +
                 "\n" +
                 "Hunger     " + Bar(hunger) + " " + Pct(hunger) + "\n" +
                 "Sleepiness " + Bar(sleep) + " " + Pct(sleep);
