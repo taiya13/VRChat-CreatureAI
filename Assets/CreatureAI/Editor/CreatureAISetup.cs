@@ -2,6 +2,7 @@ using System;
 using UdonSharp;
 using UdonSharpEditor;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -187,6 +188,72 @@ namespace CreatureAI.EditorTools
             int n = CleanupBrokenProgramAssets(true);
             EditorUtility.DisplayDialog("CreatureAI Setup",
                 "ソース未設定の壊れた Program Asset を " + n + " 個削除しました。", "OK");
+        }
+
+        // ================= 欲求の速さプリセット =================
+        // シーン内の全 Cat(CreatureProfile)の食欲・睡眠の増加速度をまとめて変更する。
+        // 再生中なら即反映、停止中なら次の Play から反映。
+
+        [MenuItem("CreatureAI/欲求の速さ/のんびり (観察向け)", false, 40)]
+        public static void SpeedRelaxed() { ApplyGrowthRates(0.5f, 0.4f, "のんびり"); }
+
+        [MenuItem("CreatureAI/欲求の速さ/ふつう (既定値)", false, 41)]
+        public static void SpeedNormal() { ApplyGrowthRates(1.0f, 0.8f, "ふつう"); }
+
+        [MenuItem("CreatureAI/欲求の速さ/はやい (テスト向け)", false, 42)]
+        public static void SpeedFast() { ApplyGrowthRates(5f, 4f, "はやい"); }
+
+        [MenuItem("CreatureAI/欲求の速さ/ばくそく (デバッグ向け)", false, 43)]
+        public static void SpeedTurbo() { ApplyGrowthRates(20f, 16f, "ばくそく"); }
+
+        /// <summary>シーン内の全 CreatureProfile に食欲/睡眠の増加速度を適用する。</summary>
+        private static void ApplyGrowthRates(float hunger, float sleep, string label)
+        {
+            CreatureProfile[] profiles = UnityEngine.Object.FindObjectsOfType<CreatureProfile>();
+            if (profiles == null || profiles.Length == 0)
+            {
+                EditorUtility.DisplayDialog("CreatureAI",
+                    "シーンに Cat(CreatureProfile)がありません。\n先に『2. テスト用の猫を作成』で猫を用意してください。", "OK");
+                return;
+            }
+
+            int n = 0;
+            foreach (CreatureProfile p in profiles)
+            {
+                try
+                {
+                    // ① 編集時の値(次の Play 以降で有効)を書き換えて保存対象にする。
+                    p.hungerGrowthRate = hunger;
+                    p.sleepinessGrowthRate = sleep;
+                    UdonSharpEditorUtility.CopyProxyToUdon(p);
+                    EditorUtility.SetDirty(p);
+
+                    // ② 再生中なら、動いている Udon 変数を直接書き換えて即反映する。
+                    if (Application.isPlaying)
+                    {
+                        VRC.Udon.UdonBehaviour udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(p);
+                        if (udon != null)
+                        {
+                            udon.SetProgramVariable("hungerGrowthRate", hunger);
+                            udon.SetProgramVariable("sleepinessGrowthRate", sleep);
+                        }
+                    }
+                    n++;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[CreatureAI] 速度適用に失敗: " + e.Message);
+                }
+            }
+
+            if (!Application.isPlaying) EditorSceneManager.MarkAllScenesDirty();
+
+            Debug.Log("[CreatureAI] 欲求の速さ = 「" + label + "」 (食欲 " + hunger +
+                "/秒, 睡眠 " + sleep + "/秒) を " + n + " 匹に適用");
+            EditorUtility.DisplayDialog("CreatureAI",
+                "欲求の速さ:「" + label + "」を " + n + " 匹に適用しました。\n" +
+                "食欲 " + hunger + " /秒、睡眠 " + sleep + " /秒\n\n" +
+                (Application.isPlaying ? "再生中なので即反映されます。" : "▶ Play で反映されます。"), "OK");
         }
 
         // ================= オブジェクト生成ヘルパー =================
