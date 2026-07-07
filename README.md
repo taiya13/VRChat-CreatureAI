@@ -26,5 +26,30 @@ Phase 1 の詳細(責務・Inspector 設定・Prefab 構成・動作確認手順
 
 ## 導入
 
-`Assets/CreatureAI` を、UdonSharp 導入済みの VRChat World プロジェクトの
-`Assets/` 配下にコピーする。`.meta` は Unity が初回インポート時に生成する。
+いずれの方法でも、UdonSharp 導入済みの VRChat World プロジェクトに取り込める。
+
+**A. .unitypackage で入れる(推奨)**
+[`dist/CreatureAI_Phase1.unitypackage`](dist/CreatureAI_Phase1.unitypackage) を
+プロジェクトにインポート(Assets > Import Package > Custom Package…)する。
+GUID は固定生成しているため、再インポートしても参照が壊れない。
+
+**B. フォルダごとコピーで入れる**
+`Assets/CreatureAI` を `.meta` ごとプロジェクトの `Assets/` 配下にコピーする。
+`.meta` はコミット済みなので GUID はチーム間で一致する。
+
+インポート後、UdonSharp のコンパイルが通ることを確認してから、
+`docs/Phase1.md` の手順で Cat Prefab を組む。
+
+### .unitypackage の再生成
+`.cs` を追加・変更したら、次で `.meta` 再生成と再パッケージ化ができる。
+```
+python3 Tools/build_unitypackage.py
+```
+GUID はパスの md5 で決定的に決まるため、既存アセットの GUID は保持される。
+
+> **Prefab について**: UdonSharp の Prefab は、各スクリプトの
+> ProgramAsset がプロジェクトごとにインポート時生成される GUID に依存するため、
+> Unity 外で正しい .prefab を手作りすることはできない。現状のパッケージは
+> スクリプト一式を提供し、Cat Prefab は `docs/Phase1.md` の手順で組む方式。
+> Prefab をパッケージに同梱したい場合は、エディタメニューから Cat Prefab を
+> 自動生成するツールを別途用意できる(要相談)。
