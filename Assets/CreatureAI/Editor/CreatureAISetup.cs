@@ -190,24 +190,39 @@ namespace CreatureAI.EditorTools
                 "ソース未設定の壊れた Program Asset を " + n + " 個削除しました。", "OK");
         }
 
-        // ================= 欲求の速さプリセット =================
-        // シーン内の全 Cat(CreatureProfile)の食欲・睡眠の増加速度をまとめて変更する。
+        // ================= 欲求の速さプリセット(食欲/睡眠を個別に変更) =================
+        // シーン内の全 Cat(CreatureProfile)の対象欲求の増加速度を変更する。
+        // 食欲だけ速く・睡眠だけ遅く、のように個別調整できる。
         // 再生中なら即反映、停止中なら次の Play から反映。
 
-        [MenuItem("CreatureAI/欲求の速さ/のんびり (観察向け)", false, 40)]
-        public static void SpeedRelaxed() { ApplyGrowthRates(0.5f, 0.4f, "のんびり"); }
+        private const string HungerVar = "hungerGrowthRate";
+        private const string SleepVar = "sleepinessGrowthRate";
 
-        [MenuItem("CreatureAI/欲求の速さ/ふつう (既定値)", false, 41)]
-        public static void SpeedNormal() { ApplyGrowthRates(1.0f, 0.8f, "ふつう"); }
+        // --- 食欲 ---
+        [MenuItem("CreatureAI/欲求の速さ/食欲/のんびり (0.5)", false, 40)]
+        public static void HungerRelaxed() { ApplyRate(true, 0.5f, "食欲", "のんびり"); }
+        [MenuItem("CreatureAI/欲求の速さ/食欲/ふつう (1.0)", false, 41)]
+        public static void HungerNormal() { ApplyRate(true, 1.0f, "食欲", "ふつう"); }
+        [MenuItem("CreatureAI/欲求の速さ/食欲/はやい (5)", false, 42)]
+        public static void HungerFast() { ApplyRate(true, 5f, "食欲", "はやい"); }
+        [MenuItem("CreatureAI/欲求の速さ/食欲/ばくそく (20)", false, 43)]
+        public static void HungerTurbo() { ApplyRate(true, 20f, "食欲", "ばくそく"); }
 
-        [MenuItem("CreatureAI/欲求の速さ/はやい (テスト向け)", false, 42)]
-        public static void SpeedFast() { ApplyGrowthRates(5f, 4f, "はやい"); }
+        // --- 睡眠 ---
+        [MenuItem("CreatureAI/欲求の速さ/睡眠/のんびり (0.4)", false, 60)]
+        public static void SleepRelaxed() { ApplyRate(false, 0.4f, "睡眠", "のんびり"); }
+        [MenuItem("CreatureAI/欲求の速さ/睡眠/ふつう (0.8)", false, 61)]
+        public static void SleepNormal() { ApplyRate(false, 0.8f, "睡眠", "ふつう"); }
+        [MenuItem("CreatureAI/欲求の速さ/睡眠/はやい (4)", false, 62)]
+        public static void SleepFast() { ApplyRate(false, 4f, "睡眠", "はやい"); }
+        [MenuItem("CreatureAI/欲求の速さ/睡眠/ばくそく (16)", false, 63)]
+        public static void SleepTurbo() { ApplyRate(false, 16f, "睡眠", "ばくそく"); }
 
-        [MenuItem("CreatureAI/欲求の速さ/ばくそく (デバッグ向け)", false, 43)]
-        public static void SpeedTurbo() { ApplyGrowthRates(20f, 16f, "ばくそく"); }
-
-        /// <summary>シーン内の全 CreatureProfile に食欲/睡眠の増加速度を適用する。</summary>
-        private static void ApplyGrowthRates(float hunger, float sleep, string label)
+        /// <summary>
+        /// シーン内の全 CreatureProfile の、指定した欲求(食欲 or 睡眠)の増加速度だけを変更する。
+        /// isHunger=true なら食欲、false なら睡眠。もう片方の値は変更しない。
+        /// </summary>
+        private static void ApplyRate(bool isHunger, float rate, string needLabel, string speedLabel)
         {
             CreatureProfile[] profiles = UnityEngine.Object.FindObjectsOfType<CreatureProfile>();
             if (profiles == null || profiles.Length == 0)
@@ -217,14 +232,15 @@ namespace CreatureAI.EditorTools
                 return;
             }
 
+            string varName = isHunger ? HungerVar : SleepVar;
             int n = 0;
             foreach (CreatureProfile p in profiles)
             {
                 try
                 {
-                    // ① 編集時の値(次の Play 以降で有効)を書き換えて保存対象にする。
-                    p.hungerGrowthRate = hunger;
-                    p.sleepinessGrowthRate = sleep;
+                    // ① 編集時の値(次の Play 以降で有効)を、対象の欲求だけ書き換える。
+                    if (isHunger) p.hungerGrowthRate = rate;
+                    else p.sleepinessGrowthRate = rate;
                     UdonSharpEditorUtility.CopyProxyToUdon(p);
                     EditorUtility.SetDirty(p);
 
@@ -232,11 +248,7 @@ namespace CreatureAI.EditorTools
                     if (Application.isPlaying)
                     {
                         VRC.Udon.UdonBehaviour udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(p);
-                        if (udon != null)
-                        {
-                            udon.SetProgramVariable("hungerGrowthRate", hunger);
-                            udon.SetProgramVariable("sleepinessGrowthRate", sleep);
-                        }
+                        if (udon != null) udon.SetProgramVariable(varName, rate);
                     }
                     n++;
                 }
@@ -248,11 +260,11 @@ namespace CreatureAI.EditorTools
 
             if (!Application.isPlaying) EditorSceneManager.MarkAllScenesDirty();
 
-            Debug.Log("[CreatureAI] 欲求の速さ = 「" + label + "」 (食欲 " + hunger +
-                "/秒, 睡眠 " + sleep + "/秒) を " + n + " 匹に適用");
+            Debug.Log("[CreatureAI] " + needLabel + " の速さ = 「" + speedLabel + "」(" + rate +
+                "/秒) を " + n + " 匹に適用");
             EditorUtility.DisplayDialog("CreatureAI",
-                "欲求の速さ:「" + label + "」を " + n + " 匹に適用しました。\n" +
-                "食欲 " + hunger + " /秒、睡眠 " + sleep + " /秒\n\n" +
+                needLabel + " の速さ:「" + speedLabel + "」(" + rate + " /秒) を " + n + " 匹に適用しました。\n" +
+                "(もう片方の欲求は変更していません)\n\n" +
                 (Application.isPlaying ? "再生中なので即反映されます。" : "▶ Play で反映されます。"), "OK");
         }
 
