@@ -46,8 +46,14 @@ namespace CreatureAI
                  "この秒数が過ぎると Registry の低頻度掃除で強制解放する。")]
         public float reserveTimeout = 10.0f;
 
-        [Header("Animator")]
-        [Tooltip("この種族が使う AnimatorController。CreatureAnimator が適用する(後フェーズ)。")]
-        public RuntimeAnimatorController animatorController;
+        // [Animator について / 仕様 3.6 からの実装上の変更]
+        // 仕様では RuntimeAnimatorController を Profile に持たせる設計だったが、
+        // Udon は RuntimeAnimatorController を「変数の型」として許可しておらず、
+        // U# コンパイルエラー(Udon does not support variables of type ... yet)で
+        // 全スクリプトの Program Asset 生成が止まる。これは v3.1 が SO→UdonSharpBehaviour
+        // で修正したのと同種の「Udon 実装不能」問題。
+        // → AnimatorController は Cat の Animator コンポーネント側に直接設定する方式に変更。
+        //   CreatureAnimator(後フェーズ)が Animator を参照して制御するため、この Profile に
+        //   RuntimeAnimatorController フィールドを持つ必要はない。
     }
 }
