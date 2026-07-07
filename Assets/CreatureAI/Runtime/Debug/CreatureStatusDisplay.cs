@@ -27,14 +27,16 @@ namespace CreatureAI
         private CreatureBrain brain;
         private CreatureTargetSelector targetSelector;
         private CreaturePointSensor sensor;
+        private ActionRunner actionRunner;
 
         public void Initialize(NeedsData data, CreatureBrain creatureBrain,
-            CreatureTargetSelector selector, CreaturePointSensor pointSensor)
+            CreatureTargetSelector selector, CreaturePointSensor pointSensor, ActionRunner runner)
         {
             needsData = data;
             brain = creatureBrain;
             targetSelector = selector;
             sensor = pointSensor;
+            actionRunner = runner;
         }
 
         /// <summary>CreatureCore の Tick から毎回呼ばれ、Text を最新状態に更新する。</summary>
@@ -45,6 +47,7 @@ namespace CreatureAI
             string goal = (brain != null) ? brain.GetCurrentGoalName() : "-";
             string target = (targetSelector != null) ? targetSelector.GetTargetPointName() : "-";
             int cands = (sensor != null) ? sensor.GetCandidateCount() : 0;
+            string action = (actionRunner != null) ? actionRunner.GetActionStateName() : "-";
 
             // 判断根拠: 最優先 Need とそのスコア(値×重み)。
             string reason = "-";
@@ -58,7 +61,7 @@ namespace CreatureAI
                 "<b>" + displayName + "</b>\n" +
                 "Goal   : " + goal + "   (top: " + reason + ")\n" +
                 "Target : " + target + "\n" +
-                "Cands  : " + cands + "\n" +
+                "Action : " + action + "   Cands: " + cands + "\n" +
                 "\n" +
                 "Hunger     " + Bar(hunger) + " " + Pct(hunger) + "\n" +
                 "Sleepiness " + Bar(sleep) + " " + Pct(sleep);

@@ -33,6 +33,7 @@ namespace CreatureAI.EditorTools
             typeof(CreatureBrain),
             typeof(CreatureTargetSelector),
             typeof(MovementController),
+            typeof(ActionRunner),
             typeof(CreatureStatusDisplay),
             typeof(CreaturePointStatusDisplay),
             typeof(Billboard),
@@ -160,6 +161,7 @@ namespace CreatureAI.EditorTools
             AddUdonSharp<CreatureBrain>(cat);
             AddUdonSharp<CreatureTargetSelector>(cat);
             AddUdonSharp<MovementController>(cat);
+            AddUdonSharp<ActionRunner>(cat);
             AddUdonSharp<CreaturePointSensor>(cat);
 
             // 見える体(差し替え可能: この Body を消して好きなモデルを Cat の子に置けばよい)。
@@ -278,6 +280,60 @@ namespace CreatureAI.EditorTools
             EditorUtility.DisplayDialog("CreatureAI",
                 needLabel + " の速さ:「" + speedLabel + "」(" + rate + " /秒) を " + n + " 匹に適用しました。\n" +
                 "(もう片方の欲求は変更していません)\n\n" +
+                (Application.isPlaying ? "再生中なので即反映されます。" : "▶ Play で反映されます。"), "OK");
+        }
+
+        // ================= 行動しきい値プリセット =================
+        // 「どのくらい欲求が溜まったら行動を開始するか」を全 Cat にまとめて設定する。
+        // 大きいほど『限界まで我慢してから動く』。再生中は即反映。
+
+        [MenuItem("CreatureAI/行動しきい値/すぐ動く (10)", false, 80)]
+        public static void ThresholdEager() { ApplyActionThreshold(10f, "すぐ動く"); }
+
+        [MenuItem("CreatureAI/行動しきい値/ふつう (40)", false, 81)]
+        public static void ThresholdNormal() { ApplyActionThreshold(40f, "ふつう"); }
+
+        [MenuItem("CreatureAI/行動しきい値/なまけ (70)", false, 82)]
+        public static void ThresholdLazy() { ApplyActionThreshold(70f, "なまけ"); }
+
+        [MenuItem("CreatureAI/行動しきい値/ギリギリ (90)", false, 83)]
+        public static void ThresholdLimit() { ApplyActionThreshold(90f, "ギリギリ"); }
+
+        /// <summary>全 CreatureProfile の actionThreshold(行動開始しきい値)を設定する。</summary>
+        private static void ApplyActionThreshold(float value, string label)
+        {
+            CreatureProfile[] profiles = UnityEngine.Object.FindObjectsOfType<CreatureProfile>();
+            if (profiles == null || profiles.Length == 0)
+            {
+                EditorUtility.DisplayDialog("CreatureAI",
+                    "シーンに Cat(CreatureProfile)がありません。\n先に『2. テスト用の猫を作成』で猫を用意してください。", "OK");
+                return;
+            }
+
+            int n = 0;
+            foreach (CreatureProfile p in profiles)
+            {
+                try
+                {
+                    p.actionThreshold = value;
+                    UdonSharpEditorUtility.CopyProxyToUdon(p);
+                    EditorUtility.SetDirty(p);
+                    if (Application.isPlaying)
+                    {
+                        VRC.Udon.UdonBehaviour udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(p);
+                        if (udon != null) udon.SetProgramVariable("actionThreshold", value);
+                    }
+                    n++;
+                }
+                catch (Exception e) { Debug.LogError("[CreatureAI] しきい値適用に失敗: " + e.Message); }
+            }
+
+            if (!Application.isPlaying) EditorSceneManager.MarkAllScenesDirty();
+
+            Debug.Log("[CreatureAI] 行動しきい値 = 「" + label + "」(" + value + ") を " + n + " 匹に適用");
+            EditorUtility.DisplayDialog("CreatureAI",
+                "行動しきい値:「" + label + "」(" + value + ") を " + n + " 匹に適用しました。\n" +
+                "この値まで欲求が溜まると行動を開始します。\n\n" +
                 (Application.isPlaying ? "再生中なので即反映されます。" : "▶ Play で反映されます。"), "OK");
         }
 

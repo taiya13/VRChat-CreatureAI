@@ -19,8 +19,10 @@ namespace CreatureAI
     /// </summary>
     public class CreatureBrain : UdonSharpBehaviour
     {
-        [Tooltip("最大スコアがこの値以下なら Goal を None(待機)にする。0 なら少しでも Need があれば Goal を持つ。")]
-        public float activationThreshold = 0f;
+        // Profile が無い場合のフォールバック値。
+        private const float FallbackThreshold = 40f;
+        // 行動を「完了」とみなす下限。対象 Need がこの値以下まで回復したら Goal を手放す。
+        private const float CompleteLevel = 5f;
 
         private NeedsData needsData;
         private CreatureProfile profile;
@@ -40,38 +42,61 @@ namespace CreatureAI
 
         /// <summary>
         /// 現在の Need から CurrentGoal を再評価する(低頻度 Tick から呼ばれる)。
-        /// 最優先 Need を選び、対応する Goal に更新。変化したときだけログを出す。
+        ///
+        /// ヒステリシス:
+        ///   ・待機中は、最優先 Need の値が「行動しきい値(Profile.actionThreshold)」以上に
+        ///     溜まったら、対応する Goal を開始する。
+        ///   ・行動中は、その Need が CompleteLevel 以下に回復するまで同じ Goal を維持する
+        ///     (食べ始めたら満たされるまで食べ続ける)。回復しきったら Goal を手放して再評価。
         /// </summary>
         public void Evaluate()
         {
             if (needsData == null) return;
 
+            float threshold = (profile != null) ? profile.actionThreshold : FallbackThreshold;
+
+            // --- 行動中: 完了するまで現在の Goal を維持(ヒステリシス) ---
+            if (currentGoal != Goal.None)
+            {
+                NeedType active = NeedForGoal(currentGoal);
+                float activeValue = needsData.GetValue(active);
+                lastBestNeed = active;
+                lastBestScore = ScoreOf(active, activeValue);
+
+                if (activeValue > CompleteLevel)
+                {
+                    return; // まだ満たされていない → 継続
+                }
+
+                // 満たされた → 完了。Goal を手放して下で再選択する。
+                Goal finished = currentGoal;
+                currentGoal = Goal.None;
+                Debug.Log("[Brain] " + name + " goal complete: " + GoalName(finished) + " (satisfied)");
+            }
+
+            // --- 待機中: 最優先 Need を選び、しきい値を超えていれば開始 ---
             int count = needsData.GetNeedCount();
             NeedType best = NeedType.Hunger;
             float bestScore = -1f;
-
             for (int i = 0; i < count; i++)
             {
                 NeedType nt = (NeedType)i;
                 float score = ScoreOf(nt, needsData.GetValueByIndex(i));
-                if (score > bestScore)
-                {
-                    bestScore = score;
-                    best = nt;
-                }
+                if (score > bestScore) { bestScore = score; best = nt; }
             }
-
             lastBestNeed = best;
             lastBestScore = bestScore;
 
-            Goal newGoal = (bestScore > activationThreshold) ? GoalForNeed(best) : Goal.None;
+            float bestValue = needsData.GetValue(best);
+            Goal newGoal = (bestValue >= threshold) ? GoalForNeed(best) : Goal.None;
 
             if (newGoal != currentGoal)
             {
                 currentGoal = newGoal;
                 Debug.Log("[Brain] " + name + " current goal: " + GoalName(newGoal) +
                     "  (Hunger=" + Round1(needsData.GetValue(NeedType.Hunger)) +
-                    ", Sleepiness=" + Round1(needsData.GetValue(NeedType.Sleepiness)) + ")");
+                    ", Sleepiness=" + Round1(needsData.GetValue(NeedType.Sleepiness)) +
+                    ", th=" + Round1(threshold) + ")");
             }
         }
 
@@ -120,6 +145,20 @@ namespace CreatureAI
                 case NeedType.Playfulness: return Goal.Play;
                 case NeedType.Affection: return Goal.SeekAffection;
                 default: return Goal.None;
+            }
+        }
+
+        /// <summary>Goal に対応する Need(GoalForNeed の逆)。ヒステリシス判定に使う。</summary>
+        private NeedType NeedForGoal(Goal goal)
+        {
+            switch (goal)
+            {
+                case Goal.Eat: return NeedType.Hunger;
+                case Goal.Sleep: return NeedType.Sleepiness;
+                case Goal.Drink: return NeedType.Thirst;
+                case Goal.Play: return NeedType.Playfulness;
+                case Goal.SeekAffection: return NeedType.Affection;
+                default: return NeedType.Hunger;
             }
         }
 

@@ -46,6 +46,12 @@ namespace CreatureAI
                  "この秒数が過ぎると Registry の低頻度掃除で強制解放する。")]
         public float reserveTimeout = 10.0f;
 
+        [Tooltip("行動しきい値: 対象の欲求がこの値(0-100)まで溜まったら行動を開始する。" +
+                 "大きいほど『限界まで我慢してから動く』。メニューからも変更可。")]
+        public float actionThreshold = 40f;
+        [Tooltip("行動中に欲求が回復する速度(1秒あたり)。大きいほど食事/睡眠が早く終わる。")]
+        public float actionRecoverRate = 20f;
+
         // [Animator について / 仕様 3.6 からの実装上の変更]
         // 仕様では RuntimeAnimatorController を Profile に持たせる設計だったが、
         // Udon は RuntimeAnimatorController を「変数の型」として許可しておらず、

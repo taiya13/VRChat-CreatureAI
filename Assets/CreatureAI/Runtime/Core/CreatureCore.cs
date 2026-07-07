@@ -33,6 +33,8 @@ namespace CreatureAI
         [HideInInspector] public NeedsData needsData;
         [HideInInspector] public CreatureBrain brain;
         [HideInInspector] public CreatureTargetSelector targetSelector;
+        [HideInInspector] public MovementController movementController;
+        [HideInInspector] public ActionRunner actionRunner;
         [HideInInspector] public CreaturePointSensor pointSensor;
         [HideInInspector] public CreatureStatusDisplay statusDisplay;
         [HideInInspector] public CreatureProfile profile;
@@ -49,6 +51,8 @@ namespace CreatureAI
             needsData = GetComponent<NeedsData>();
             brain = GetComponent<CreatureBrain>();
             targetSelector = GetComponent<CreatureTargetSelector>();
+            movementController = GetComponent<MovementController>();
+            actionRunner = GetComponent<ActionRunner>();
             pointSensor = GetComponent<CreaturePointSensor>();
             statusDisplay = GetComponentInChildren<CreatureStatusDisplay>();
             profile = GetComponentInChildren<CreatureProfile>();
@@ -58,7 +62,8 @@ namespace CreatureAI
             if (needsController != null) needsController.Initialize(profile, needsData);
             if (brain != null) brain.Initialize(needsData, profile);
             if (targetSelector != null) targetSelector.Initialize(brain, pointSensor);
-            if (statusDisplay != null) statusDisplay.Initialize(needsData, brain, targetSelector, pointSensor);
+            if (actionRunner != null) actionRunner.Initialize(brain, targetSelector, movementController, needsController, profile);
+            if (statusDisplay != null) statusDisplay.Initialize(needsData, brain, targetSelector, pointSensor, actionRunner);
 
             if (profile == null)
                 Debug.LogWarning("[CreatureCore] Profile が見つかりません。子オブジェクト 'Profile' に " +
@@ -92,6 +97,9 @@ namespace CreatureAI
                 if (targetSelector != null) targetSelector.SelectTarget();
             }
 
+            // 行動実行は毎 Tick(到着後の回復を進める)。
+            if (actionRunner != null) actionRunner.Tick();
+
             // 表示更新は毎 Tick(滑らかに見せるため)。
             if (statusDisplay != null) statusDisplay.UpdateDisplay();
 
@@ -99,8 +107,6 @@ namespace CreatureAI
             if (tickCounter % 10 == 0 && localRegistry != null && profile != null)
                 localRegistry.CleanupExpiredReservations(profile.reserveTimeout);
             // Phase 3+: if (tickCounter % 10 == 0) relationshipManager.Update();
-
-            // Phase 2+: actionRunner.Tick();   // 行動実行だけは毎 Tick 動かす
 
             // 次の Tick を予約(1 匹 = タイマー 1 本)。
             SendCustomEventDelayedSeconds(nameof(OnCoreTick), tickInterval);
