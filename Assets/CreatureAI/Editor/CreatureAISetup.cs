@@ -29,8 +29,10 @@ namespace CreatureAI.EditorTools
             typeof(CreatureProfile),
         };
 
-        private const string RootFolder = "Assets/CreatureAI";
-        private const string ProgramAssetFolder = "Assets/CreatureAI/ProgramAssets";
+        // Program Asset の置き場所。スクリプトの実際の配置場所に依存しないよう、
+        // Assets 直下の固定フォルダに置く(Program Asset はどこにあってもスクリプトを
+        // GUID 参照するので位置は自由)。.cs 本体は FindScript が全プロジェクトから探す。
+        private const string ProgramAssetFolder = "Assets/CreatureAI_ProgramAssets";
 
         private static string PathFor(Type t)
         {
@@ -68,15 +70,10 @@ namespace CreatureAI.EditorTools
         [MenuItem("CreatureAI/1. Program Asset を作成 (最初に1回)", false, 1)]
         public static void SetupProgramAssets()
         {
-            if (!AssetDatabase.IsValidFolder(RootFolder))
-            {
-                EditorUtility.DisplayDialog("CreatureAI Setup",
-                    "Assets/CreatureAI フォルダが見つかりません。zip の展開先を確認してください。", "OK");
-                return;
-            }
             if (!AssetDatabase.IsValidFolder(ProgramAssetFolder))
             {
-                AssetDatabase.CreateFolder(RootFolder, "ProgramAssets");
+                // Assets は常に存在するので、その直下に固定フォルダを作る(場所非依存)。
+                AssetDatabase.CreateFolder("Assets", "CreatureAI_ProgramAssets");
             }
 
             int created = 0, repaired = 0, ok = 0, failed = 0;
