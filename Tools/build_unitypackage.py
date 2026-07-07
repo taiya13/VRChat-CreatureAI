@@ -96,7 +96,9 @@ def ti(name, data_bytes, mtime):
 
 mtime = int(time.time())
 count = 0
-with tarfile.open(pkg_path, "w:gz") as tar:
+# Unity の .unitypackage インポータは PAX 形式の tar を展開できないことがあるため、
+# 必ず GNU 形式で書き出す(エントリ名・サイズとも GNU の範囲内なので拡張ヘッダは出ない)。
+with tarfile.open(pkg_path, "w:gz", format=tarfile.GNU_FORMAT) as tar:
     for rel, (g, m, is_folder) in sorted(meta_map.items()):
         # pathname
         pn = (rel + "\n").encode("utf-8")
