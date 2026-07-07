@@ -105,6 +105,9 @@ namespace CreatureAI
         public float GetReservedAt() { return reservedAt; }
         public bool IsHeldBy(UdonSharpBehaviour who) { return holder == who; }
 
+        /// <summary>予約者の名前(表示用)。未予約なら "-"。</summary>
+        public string GetHolderName() { return holder != null ? holder.name : "-"; }
+
         /// <summary>要求種別のいずれかを、この地点が備えているか。</summary>
         public bool MatchesType(PointType required)
         {
