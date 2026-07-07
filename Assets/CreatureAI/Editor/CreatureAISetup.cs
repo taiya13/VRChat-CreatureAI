@@ -26,6 +26,8 @@ namespace CreatureAI.EditorTools
             typeof(CreaturePointRegistry),
             typeof(CreaturePointSensor),
             typeof(NeedsController),
+            typeof(NeedsData),
+            typeof(CreatureBrain),
             typeof(CreatureProfile),
         };
 
@@ -166,6 +168,8 @@ namespace CreatureAI.EditorTools
             Undo.RegisterCreatedObjectUndo(cat, "Create CreatureAI Cat");
             AddUdonSharp<CreatureCore>(cat);
             AddUdonSharp<NeedsController>(cat);
+            AddUdonSharp<NeedsData>(cat);
+            AddUdonSharp<CreatureBrain>(cat);
             AddUdonSharp<CreaturePointSensor>(cat);
 
             GameObject profile = new GameObject("Profile");

@@ -28,8 +28,10 @@ namespace CreatureAI
         [Tooltip("起動時にこの秒数までのランダム遅延を入れ、多数の猫の Tick 位相をばらす。")]
         public float startupJitter = 0.2f;
 
-        // --- 兄弟コンポーネント参照(仕様 3.1「公開参照」/ Phase 1 で存在する分) ---
+        // --- 兄弟コンポーネント参照(仕様 3.1「公開参照」) ---
         [HideInInspector] public NeedsController needsController;
+        [HideInInspector] public NeedsData needsData;
+        [HideInInspector] public CreatureBrain brain;
         [HideInInspector] public CreaturePointSensor pointSensor;
         [HideInInspector] public CreatureProfile profile;
 
@@ -42,12 +44,15 @@ namespace CreatureAI
         {
             // ① 参照キャッシュ(GetComponent は起動時の 1 回だけ)。
             needsController = GetComponent<NeedsController>();
+            needsData = GetComponent<NeedsData>();
+            brain = GetComponent<CreatureBrain>();
             pointSensor = GetComponent<CreaturePointSensor>();
             profile = GetComponentInChildren<CreatureProfile>();
             localRegistry = GetComponentInChildren<CreaturePointRegistry>();
 
             // ② 依存注入 & 選出状況の確認ログ。
-            if (needsController != null) needsController.Initialize(profile);
+            if (needsController != null) needsController.Initialize(profile, needsData);
+            if (brain != null) brain.Initialize(needsData, profile);
 
             if (profile == null)
                 Debug.LogWarning("[CreatureCore] Profile が見つかりません。子オブジェクト 'Profile' に " +
@@ -73,9 +78,12 @@ namespace CreatureAI
             if (pointSensor != null) pointSensor.RefreshIfNeeded();
             // Phase 2+: threatEvaluator.Check();
 
-            // 低頻度: 欲求増加。
-            if (tickCounter % 5 == 0 && needsController != null) needsController.GrowNeeds();
-            // Phase 2+: if (tickCounter % 5 == 0) decisionMaker.Evaluate();
+            // 低頻度: 欲求増加 → 意思決定(この順序。増やしてから評価する)。
+            if (tickCounter % 5 == 0)
+            {
+                if (needsController != null) needsController.GrowNeeds();
+                if (brain != null) brain.Evaluate();
+            }
 
             // より低頻度: 占有タイムアウトの掃除(安全網 / 仕様 3.5節)。
             if (tickCounter % 10 == 0 && localRegistry != null && profile != null)
