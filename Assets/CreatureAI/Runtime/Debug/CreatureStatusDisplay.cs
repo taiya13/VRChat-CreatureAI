@@ -84,5 +84,7 @@ namespace CreatureAI
             int v = (int)(Mathf.Clamp(value, 0f, 100f) + 0.5f);
             return v + "%";
         }
+
+        private float Round1(float v) { return Mathf.Round(v * 10f) / 10f; }
     }
 }
