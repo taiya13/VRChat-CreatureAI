@@ -70,6 +70,9 @@ namespace CreatureAI
 
         public Goal GetCurrentGoal() { return currentGoal; }
 
+        /// <summary>現在の Goal を表示用の文字列で返す(状態表示 UI 等が使う)。</summary>
+        public string GetCurrentGoalName() { return GoalName(currentGoal); }
+
         // ================= 拡張ポイント =================
 
         /// <summary>

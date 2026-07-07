@@ -32,7 +32,9 @@ namespace CreatureAI
         [HideInInspector] public NeedsController needsController;
         [HideInInspector] public NeedsData needsData;
         [HideInInspector] public CreatureBrain brain;
+        [HideInInspector] public CreatureTargetSelector targetSelector;
         [HideInInspector] public CreaturePointSensor pointSensor;
+        [HideInInspector] public CreatureStatusDisplay statusDisplay;
         [HideInInspector] public CreatureProfile profile;
 
         // このネコが同梱する Registry(選出結果の確認・タイムアウト掃除に使う)。
@@ -46,13 +48,17 @@ namespace CreatureAI
             needsController = GetComponent<NeedsController>();
             needsData = GetComponent<NeedsData>();
             brain = GetComponent<CreatureBrain>();
+            targetSelector = GetComponent<CreatureTargetSelector>();
             pointSensor = GetComponent<CreaturePointSensor>();
+            statusDisplay = GetComponentInChildren<CreatureStatusDisplay>();
             profile = GetComponentInChildren<CreatureProfile>();
             localRegistry = GetComponentInChildren<CreaturePointRegistry>();
 
             // ② 依存注入 & 選出状況の確認ログ。
             if (needsController != null) needsController.Initialize(profile, needsData);
             if (brain != null) brain.Initialize(needsData, profile);
+            if (targetSelector != null) targetSelector.Initialize(brain, pointSensor);
+            if (statusDisplay != null) statusDisplay.Initialize(needsData, brain, targetSelector);
 
             if (profile == null)
                 Debug.LogWarning("[CreatureCore] Profile が見つかりません。子オブジェクト 'Profile' に " +
@@ -78,12 +84,16 @@ namespace CreatureAI
             if (pointSensor != null) pointSensor.RefreshIfNeeded();
             // Phase 2+: threatEvaluator.Check();
 
-            // 低頻度: 欲求増加 → 意思決定(この順序。増やしてから評価する)。
+            // 低頻度: 欲求増加 → 意思決定 → ターゲット選択(この順序)。
             if (tickCounter % 5 == 0)
             {
                 if (needsController != null) needsController.GrowNeeds();
                 if (brain != null) brain.Evaluate();
+                if (targetSelector != null) targetSelector.SelectTarget();
             }
+
+            // 表示更新は毎 Tick(滑らかに見せるため)。
+            if (statusDisplay != null) statusDisplay.UpdateDisplay();
 
             // より低頻度: 占有タイムアウトの掃除(安全網 / 仕様 3.5節)。
             if (tickCounter % 10 == 0 && localRegistry != null && profile != null)

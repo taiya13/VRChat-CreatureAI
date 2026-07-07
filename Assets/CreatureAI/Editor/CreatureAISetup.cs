@@ -3,6 +3,7 @@ using UdonSharp;
 using UdonSharpEditor;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace CreatureAI.EditorTools
 {
@@ -12,10 +13,11 @@ namespace CreatureAI.EditorTools
     /// UdonSharp は「.cs を入れるだけ」では動かず、スクリプト1つにつき
     /// UdonSharpProgramAsset(実行データ)が必要。これが無いと
     /// 「Unable to find valid U# program asset」となり Inspector も壊れる。
-    /// このツールが Program Asset の生成とテスト用オブジェクトの組み立てを行う。
     ///
-    /// 判定は「固定パス Assets/CreatureAI/ProgramAssets/<型名>.asset」で行い、
-    /// GetClass() のタイミング依存を避ける。何度実行しても安全(冪等)。
+    /// また、ソース未設定(sourceCsScript=None)の壊れた ProgramAsset が
+    /// プロジェクトに1つでも残っていると、UdonSharp が内部の「クラス→アセット」辞書を
+    /// 作る際に null キーで落ち(Value cannot be null. Parameter name: key)、
+    /// 以後すべてのコンポーネント追加が失敗する。メニュー1でこれを自動掃除する。
     /// </summary>
     public static class CreatureAISetup
     {
@@ -28,20 +30,16 @@ namespace CreatureAI.EditorTools
             typeof(NeedsController),
             typeof(NeedsData),
             typeof(CreatureBrain),
+            typeof(CreatureTargetSelector),
+            typeof(CreatureStatusDisplay),
             typeof(CreatureProfile),
         };
 
-        // Program Asset の置き場所。スクリプトの実際の配置場所に依存しないよう、
-        // Assets 直下の固定フォルダに置く(Program Asset はどこにあってもスクリプトを
-        // GUID 参照するので位置は自由)。.cs 本体は FindScript が全プロジェクトから探す。
         private const string ProgramAssetFolder = "Assets/CreatureAI_ProgramAssets";
 
-        private static string PathFor(Type t)
-        {
-            return ProgramAssetFolder + "/" + t.Name + ".asset";
-        }
+        private static string PathFor(Type t) { return ProgramAssetFolder + "/" + t.Name + ".asset"; }
 
-        // ================= メニュー 0: 状態確認(診断用) =================
+        // ================= メニュー 0: 診断 =================
 
         [MenuItem("CreatureAI/0. 状態を確認 (診断)", false, 0)]
         public static void Diagnose()
@@ -51,20 +49,18 @@ namespace CreatureAI.EditorTools
             foreach (Type t in BehaviourTypes)
             {
                 MonoScript script = FindScript(t);
-                string scriptState = script != null ? ("見つかった (" + AssetDatabase.GetAssetPath(script) + ")") : "★見つからない★";
-
+                string scriptState = script != null ? "OK" : "★.cs が見つからない★";
                 UdonSharpProgramAsset pa = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(PathFor(t));
-                string paState;
-                if (pa == null) paState = "★無し★";
-                else if (pa.sourceCsScript == null) paState = "有るが sourceCsScript=None";
-                else paState = "OK (source=" + pa.sourceCsScript.name + ")";
-
+                string paState = pa == null ? "★無し★"
+                    : (pa.sourceCsScript == null ? "★sourceCsScript=None★" : "OK");
                 Debug.Log("[" + t.Name + "] .cs=" + scriptState + " / ProgramAsset=" + paState);
             }
+            int broken = CountBrokenProgramAssets(true);
+            Debug.Log("プロジェクト全体の壊れ(ソース未設定)Program Asset: " + broken + " 個");
             Debug.Log("===== CreatureAI 診断終了 =====");
             EditorUtility.DisplayDialog("CreatureAI 診断",
-                "結果を Console に出力しました。\n各行の .cs と ProgramAsset の状態を確認してください。",
-                "OK");
+                "結果を Console に出力しました。\n壊れ Program Asset が 0 でないなら、" +
+                "メニュー1(または『壊れた Program Asset を掃除』)を実行してください。", "OK");
         }
 
         // ================= メニュー 1: Program Asset 生成 =================
@@ -72,14 +68,13 @@ namespace CreatureAI.EditorTools
         [MenuItem("CreatureAI/1. Program Asset を作成 (最初に1回)", false, 1)]
         public static void SetupProgramAssets()
         {
+            // ① 壊れアセットを先に掃除(これが「Value cannot be null. key」の根本対策)。
+            int cleaned = CleanupBrokenProgramAssets(true);
+
             if (!AssetDatabase.IsValidFolder(ProgramAssetFolder))
-            {
-                // Assets は常に存在するので、その直下に固定フォルダを作る(場所非依存)。
                 AssetDatabase.CreateFolder("Assets", "CreatureAI_ProgramAssets");
-            }
 
             int created = 0, repaired = 0, ok = 0, failed = 0;
-
             foreach (Type t in BehaviourTypes)
             {
                 MonoScript script = FindScript(t);
@@ -93,66 +88,54 @@ namespace CreatureAI.EditorTools
 
                 string path = PathFor(t);
                 UdonSharpProgramAsset pa = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(path);
-
                 if (pa == null)
                 {
                     pa = ScriptableObject.CreateInstance<UdonSharpProgramAsset>();
                     pa.sourceCsScript = script;
                     AssetDatabase.CreateAsset(pa, path);
                     created++;
-                    Debug.Log("[CreatureAI Setup] 作成: " + path);
                 }
                 else if (pa.sourceCsScript == null || pa.sourceCsScript != script)
                 {
                     pa.sourceCsScript = script;
                     EditorUtility.SetDirty(pa);
                     repaired++;
-                    Debug.Log("[CreatureAI Setup] 修復(sourceCsScript を再設定): " + path);
                 }
-                else
-                {
-                    ok++;
-                }
+                else ok++;
             }
 
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-
-            // 実行データをコンパイル。
             UdonSharpProgramAsset.CompileAllCsPrograms(true);
 
-            string msg = "Program Asset: 新規 " + created + " / 修復 " + repaired +
+            string msg = "壊れアセット削除 " + cleaned + "\n" +
+                         "Program Asset: 新規 " + created + " / 修復 " + repaired +
                          " / 既存OK " + ok + " / 失敗 " + failed + "\n\n";
-            if (failed > 0)
-                msg += "★ 失敗が " + failed + " 件あります。Console の赤いエラー(.cs が見つからない等)を確認してください。";
-            else
-                msg += "U# コンパイルが走ります。Console にエラーが無ければ\n『CreatureAI > 2. テスト用 Cat と FoodBowl を作成』へ。";
-
+            msg += (failed > 0)
+                ? "★ 失敗があります。Console の赤エラーを確認してください。"
+                : "U# コンパイル後、Console にエラーが無ければ\n『CreatureAI > 2. テスト用の猫を作成』へ。";
             EditorUtility.DisplayDialog("CreatureAI Setup", msg, "OK");
         }
 
         // ================= メニュー 2: テスト用オブジェクト組み立て =================
 
-        [MenuItem("CreatureAI/2. テスト用 Cat と FoodBowl を作成", false, 2)]
+        [MenuItem("CreatureAI/2. テスト用の猫を作成", false, 2)]
         public static void CreateTestSceneObjects()
         {
-            // 固定パスで Program Asset の有無を確認(GetClass 非依存)。
+            // 念のため壊れアセットを黙って掃除(辞書汚染で AddComponent が落ちるのを防ぐ)。
+            CleanupBrokenProgramAssets(false);
+
             System.Text.StringBuilder missing = new System.Text.StringBuilder();
             foreach (Type t in BehaviourTypes)
             {
                 UdonSharpProgramAsset pa = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(PathFor(t));
-                if (pa == null || pa.sourceCsScript == null)
-                {
-                    missing.Append("・").Append(t.Name).Append("\n");
-                }
+                if (pa == null || pa.sourceCsScript == null) missing.Append("・").Append(t.Name).Append("\n");
             }
             if (missing.Length > 0)
             {
                 EditorUtility.DisplayDialog("CreatureAI Setup",
                     "次の Program Asset がまだありません:\n" + missing +
-                    "\n先に『CreatureAI > 1. Program Asset を作成』を実行してください。\n" +
-                    "それでも出る場合は『0. 状態を確認』を押して Console を確認してください。",
-                    "OK");
+                    "\n先に『CreatureAI > 1. Program Asset を作成』を実行してください。", "OK");
                 return;
             }
 
@@ -160,16 +143,18 @@ namespace CreatureAI.EditorTools
             {
                 EditorUtility.DisplayDialog("CreatureAI Setup",
                     "シーンに既に Cat または __CatAI_Registry があります。\n" +
-                    "以前の(壊れている可能性のある)ものを削除してから再実行してください。", "OK");
+                    "以前のものを削除してから再実行してください。", "OK");
                 return;
             }
 
+            // --- Cat 本体 ---
             GameObject cat = new GameObject("Cat");
             Undo.RegisterCreatedObjectUndo(cat, "Create CreatureAI Cat");
             AddUdonSharp<CreatureCore>(cat);
             AddUdonSharp<NeedsController>(cat);
             AddUdonSharp<NeedsData>(cat);
             AddUdonSharp<CreatureBrain>(cat);
+            AddUdonSharp<CreatureTargetSelector>(cat);
             AddUdonSharp<CreaturePointSensor>(cat);
 
             GameObject profile = new GameObject("Profile");
@@ -180,44 +165,142 @@ namespace CreatureAI.EditorTools
             registry.transform.SetParent(cat.transform, false);
             AddUdonSharp<CreaturePointRegistry>(registry);
 
-            GameObject bowl = new GameObject("FoodBowl");
-            Undo.RegisterCreatedObjectUndo(bowl, "Create CreatureAI FoodBowl");
-            bowl.transform.position = new Vector3(2f, 0f, 0f);
-            CreaturePoint point = AddUdonSharp<CreaturePoint>(bowl);
-            if (point != null)
-            {
-                point.pointType = PointType.Food;
-                EditorUtility.SetDirty(point);
-            }
+            // --- ワールド側ポイント: 餌 と ベッド ---
+            CreatePoint("FoodBowl", PointType.Food, new Vector3(2f, 0f, 0f));
+            CreatePoint("Bed", PointType.Bed, new Vector3(-2f, 0f, 1f));
+
+            // --- 頭上の状態表示ボード ---
+            BuildStatusBoard(cat);
 
             Selection.activeGameObject = cat;
-
             EditorUtility.DisplayDialog("CreatureAI Setup",
-                "Cat(+Profile, __CatAI_Registry)と FoodBowl を作成しました。\n\n" +
-                "▶ Play で Console に『Singleton に選出』『登録: FoodBowl』『近傍候補: 1 個』が\n" +
-                "出れば Phase 1 成功です。", "OK");
+                "Cat 一式・FoodBowl・Bed・状態表示ボードを作成しました。\n\n" +
+                "▶ Play で、頭上ボードに Hunger/Sleepiness のバーと Goal/Target が\n" +
+                "表示され、Console に [Brain]/[Target] ログが出れば成功です。", "OK");
         }
 
-        // ================= 内部ヘルパー =================
+        // ================= メニュー 9: 壊れアセット掃除(単体) =================
+
+        [MenuItem("CreatureAI/9. 壊れた Program Asset を掃除", false, 20)]
+        public static void CleanupMenu()
+        {
+            int n = CleanupBrokenProgramAssets(true);
+            EditorUtility.DisplayDialog("CreatureAI Setup",
+                "ソース未設定の壊れた Program Asset を " + n + " 個削除しました。", "OK");
+        }
+
+        // ================= オブジェクト生成ヘルパー =================
+
+        private static void CreatePoint(string name, PointType type, Vector3 pos)
+        {
+            GameObject go = new GameObject(name);
+            Undo.RegisterCreatedObjectUndo(go, "Create CreatureAI Point");
+            go.transform.position = pos;
+            CreaturePoint p = AddUdonSharp<CreaturePoint>(go);
+            if (p != null) { p.pointType = type; EditorUtility.SetDirty(p); }
+        }
+
+        /// <summary>猫の頭上に World Space Canvas + UI.Text の状態ボードを組み立てる。</summary>
+        private static void BuildStatusBoard(GameObject cat)
+        {
+            GameObject board = new GameObject("StatusBoard", typeof(Canvas), typeof(CanvasScaler));
+            board.transform.SetParent(cat.transform, false);
+            board.transform.localPosition = new Vector3(0f, 1.6f, 0f);
+
+            Canvas canvas = board.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            RectTransform crt = (RectTransform)board.transform;
+            crt.sizeDelta = new Vector2(520f, 260f);
+            crt.localScale = new Vector3(0.003f, 0.003f, 0.003f);
+
+            // 背景(半透明の黒)
+            GameObject bg = new GameObject("BG", typeof(RectTransform));
+            bg.transform.SetParent(board.transform, false);
+            Image img = bg.AddComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0.6f);
+            StretchFull((RectTransform)bg.transform, 0f);
+
+            // テキスト
+            GameObject textGO = new GameObject("Text", typeof(RectTransform));
+            textGO.transform.SetParent(board.transform, false);
+            Text text = textGO.AddComponent<Text>();
+            Font font = (Font)Resources.GetBuiltinResource(typeof(Font), "LegacyRuntime.ttf");
+            if (font == null) font = (Font)Resources.GetBuiltinResource(typeof(Font), "Arial.ttf");
+            text.font = font;
+            text.fontSize = 22;
+            text.color = Color.white;
+            text.alignment = TextAnchor.UpperLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.text = "Cat";
+            StretchFull((RectTransform)textGO.transform, 14f);
+
+            CreatureStatusDisplay disp = AddUdonSharp<CreatureStatusDisplay>(board);
+            if (disp != null)
+            {
+                disp.targetText = text;
+                disp.displayName = "Cat";
+                EditorUtility.SetDirty(disp);
+            }
+        }
+
+        private static void StretchFull(RectTransform rt, float padding)
+        {
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(padding, padding);
+            rt.offsetMax = new Vector2(-padding, -padding);
+        }
 
         private static T AddUdonSharp<T>(GameObject go) where T : UdonSharpBehaviour
         {
             T proxy = Undo.AddComponent<T>(go);
-            try
-            {
-                UdonSharpEditorUtility.CreateBehaviourForProxy(proxy);
-            }
+            try { UdonSharpEditorUtility.CreateBehaviourForProxy(proxy); }
             catch (Exception e)
             {
-                Debug.LogError("[CreatureAI Setup] " + typeof(T).Name + " のセットアップに失敗: " + e.Message);
+                Debug.LogError("[CreatureAI Setup] " + typeof(T).Name + " のセットアップに失敗: " + e.Message +
+                    "\n→ メニュー1(壊れアセット掃除込み)を実行後、もう一度お試しください。");
             }
             return proxy;
         }
 
-        /// <summary>
-        /// 型に対応する .cs (MonoScript) を、ファイルパス末尾 "/<型名>.cs" で厳密一致検索する。
-        /// (GetClass に依存しないので、部分名一致 CreaturePoint/CreaturePointSensor の混同も避けられる)
-        /// </summary>
+        // ================= Program Asset ヘルパー =================
+
+        /// <summary>ソース未設定の壊れた ProgramAsset を削除して数を返す。</summary>
+        private static int CleanupBrokenProgramAssets(bool log)
+        {
+            int removed = 0;
+            foreach (string guid in AssetDatabase.FindAssets("t:UdonSharpProgramAsset"))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                UdonSharpProgramAsset pa = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(path);
+                if (pa != null && pa.sourceCsScript == null)
+                {
+                    if (log) Debug.LogWarning("[CreatureAI Setup] 壊れた Program Asset を削除: " + path);
+                    AssetDatabase.DeleteAsset(path);
+                    removed++;
+                }
+            }
+            if (removed > 0) { AssetDatabase.SaveAssets(); AssetDatabase.Refresh(); }
+            return removed;
+        }
+
+        private static int CountBrokenProgramAssets(bool log)
+        {
+            int n = 0;
+            foreach (string guid in AssetDatabase.FindAssets("t:UdonSharpProgramAsset"))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                UdonSharpProgramAsset pa = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(path);
+                if (pa != null && pa.sourceCsScript == null)
+                {
+                    if (log) Debug.LogWarning("[CreatureAI 診断] 壊れ: " + path);
+                    n++;
+                }
+            }
+            return n;
+        }
+
         private static MonoScript FindScript(Type t)
         {
             string suffix = "/" + t.Name + ".cs";
