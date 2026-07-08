@@ -59,7 +59,7 @@ namespace CreatureAI
             localRegistry = GetComponentInChildren<CreaturePointRegistry>();
 
             // ② 依存注入 & 選出状況の確認ログ。
-            if (needsController != null) needsController.Initialize(profile, needsData);
+            if (needsController != null) needsController.Initialize(profile, needsData, actionRunner);
             if (brain != null) brain.Initialize(needsData, profile);
             if (targetSelector != null) targetSelector.Initialize(brain, pointSensor);
             if (actionRunner != null) actionRunner.Initialize(brain, targetSelector, movementController, needsController, profile);

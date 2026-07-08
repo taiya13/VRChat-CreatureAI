@@ -93,6 +93,9 @@ namespace CreatureAI
         public bool IsActing() { return acting; }
         public string GetActionStateName() { return acting ? GoalName(actingGoal) : "-"; }
 
+        /// <summary>今まさに行動中の対象 Need(空腹を食べている等)。NeedsController が増加を止めるのに使う。</summary>
+        public NeedType GetActingNeed() { return NeedForGoal(actingGoal); }
+
         // ================= ヘルパー =================
 
         private NeedType NeedForGoal(Goal goal)

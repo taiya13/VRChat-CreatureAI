@@ -17,14 +17,16 @@ namespace CreatureAI
     {
         private CreatureProfile profile;
         private NeedsData needsData;
+        private ActionRunner actionRunner;
 
         private float lastGrowTime = -1f;
 
-        /// <summary>CreatureCore.Start から Profile と NeedsData を注入する。</summary>
-        public void Initialize(CreatureProfile creatureProfile, NeedsData data)
+        /// <summary>CreatureCore.Start から Profile / NeedsData / ActionRunner を注入する。</summary>
+        public void Initialize(CreatureProfile creatureProfile, NeedsData data, ActionRunner runner)
         {
             profile = creatureProfile;
             needsData = data;
+            actionRunner = runner;
             lastGrowTime = Time.time;
         }
 
@@ -40,11 +42,17 @@ namespace CreatureAI
             lastGrowTime = now;
             if (dt <= 0f) return;
 
+            // 行動中の欲求は溜めない(食事中は空腹が増えない等)。
+            int actingIndex = -1;
+            if (actionRunner != null && actionRunner.IsActing())
+                actingIndex = (int)actionRunner.GetActingNeed();
+
             // 全 Need を、それぞれの increaseRate で増やす(0 の Need は増えない)。
             // Water/Fun/Social を足しても、増加速度を設定するだけで自動的に働く。
             int count = needsData.GetNeedCount();
             for (int i = 0; i < count; i++)
             {
+                if (i == actingIndex) continue; // 行動中の欲求はスキップ
                 NeedType nt = (NeedType)i;
                 float rate = profile.GetIncreaseRate(nt);
                 if (rate != 0f) needsData.AddClamped(nt, rate * dt);

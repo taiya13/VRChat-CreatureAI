@@ -34,7 +34,7 @@ namespace CreatureAI.EditorTools
         private void OnGUI()
         {
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Need ごとのパラメータ設定", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("欲求(Need)ごとのパラメータ設定", EditorStyles.boldLabel);
 
             CreatureProfile picked = (CreatureProfile)EditorGUILayout.ObjectField(
                 "対象 Profile", target, typeof(CreatureProfile), true);
@@ -61,13 +61,13 @@ namespace CreatureAI.EditorTools
             EditorGUILayout.Space();
             scroll = EditorGUILayout.BeginScrollView(scroll);
 
-            // ヘッダ
+            // ヘッダ(日本語・ツールチップ付き)
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Need", EditorStyles.miniBoldLabel, GUILayout.Width(120));
-            GUILayout.Label("Increase", EditorStyles.miniBoldLabel, GUILayout.Width(70));
-            GUILayout.Label("Decrease", EditorStyles.miniBoldLabel, GUILayout.Width(70));
-            GUILayout.Label("Threshold", EditorStyles.miniBoldLabel, GUILayout.Width(70));
-            GUILayout.Label("Weight", EditorStyles.miniBoldLabel, GUILayout.Width(70));
+            GUILayout.Label("欲求", EditorStyles.miniBoldLabel, GUILayout.Width(150));
+            GUILayout.Label(new GUIContent("増加速度", "時間でどれだけ速く溜まるか(1秒あたり)。0 なら溜まらない"), EditorStyles.miniBoldLabel, GUILayout.Width(70));
+            GUILayout.Label(new GUIContent("回復速度", "行動中(食事/睡眠中)にどれだけ速く減るか(1秒あたり)"), EditorStyles.miniBoldLabel, GUILayout.Width(70));
+            GUILayout.Label(new GUIContent("開始値", "この値まで溜まったら行動を始める"), EditorStyles.miniBoldLabel, GUILayout.Width(70));
+            GUILayout.Label(new GUIContent("重み", "優先度の重み。値×重み が最大の欲求を優先する"), EditorStyles.miniBoldLabel, GUILayout.Width(70));
             EditorGUILayout.EndHorizontal();
 
             string[] names = Enum.GetNames(typeof(NeedType));
@@ -77,7 +77,7 @@ namespace CreatureAI.EditorTools
             for (int i = 0; i < count; i++)
             {
                 EditorGUILayout.BeginHorizontal();
-                GUILayout.Label(names[i], GUILayout.Width(120));
+                GUILayout.Label(NeedLabel(i, names), GUILayout.Width(150));
                 inc[i] = EditorGUILayout.FloatField(inc[i], GUILayout.Width(70));
                 dec[i] = EditorGUILayout.FloatField(dec[i], GUILayout.Width(70));
                 thr[i] = EditorGUILayout.FloatField(thr[i], GUILayout.Width(70));
@@ -87,8 +87,8 @@ namespace CreatureAI.EditorTools
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("移動・占有", EditorStyles.miniBoldLabel);
-            moveSpeed = EditorGUILayout.FloatField("Move Speed", moveSpeed);
-            reserveTimeout = EditorGUILayout.FloatField("Reserve Timeout", reserveTimeout);
+            moveSpeed = EditorGUILayout.FloatField(new GUIContent("移動速度 (Move Speed)", "歩く速さ(m/秒)"), moveSpeed);
+            reserveTimeout = EditorGUILayout.FloatField(new GUIContent("予約タイムアウト (Reserve Timeout)", "予約したまま到達しない場合に強制解放するまでの秒数"), reserveTimeout);
 
             EditorGUILayout.EndScrollView();
 
@@ -109,8 +109,25 @@ namespace CreatureAI.EditorTools
             GUI.backgroundColor = Color.white;
 
             EditorGUILayout.HelpBox(
-                "Increase=増加速度 / Decrease=行動中の回復速度 / Threshold=行動開始の基準 / Weight=優先度の重み。\n" +
-                "再生中に適用すると即反映されます。", MessageType.None);
+                "増加速度=時間で溜まる速さ / 回復速度=行動中に減る速さ / 開始値=行動を始める溜まり具合 / 重み=優先度。\n" +
+                "再生中に「適用」を押すと即反映されます。停止中は次の Play から反映。", MessageType.Info);
+        }
+
+        /// <summary>欲求の日本語表示名(英語名も併記)。未知の Need は英語名のまま。</summary>
+        private static string NeedLabel(int index, string[] enumNames)
+        {
+            string jp;
+            switch (index)
+            {
+                case 0: jp = "空腹"; break;       // Hunger
+                case 1: jp = "眠気"; break;       // Sleepiness
+                case 2: jp = "喉の渇き"; break;   // Thirst
+                case 3: jp = "遊びたさ"; break;   // Playfulness
+                case 4: jp = "甘えたさ"; break;   // Affection
+                default: jp = ""; break;
+            }
+            string en = (index < enumNames.Length) ? enumNames[index] : ("Need" + index);
+            return (jp.Length > 0) ? (jp + " (" + en + ")") : en;
         }
 
         // ================= 読み書き =================
