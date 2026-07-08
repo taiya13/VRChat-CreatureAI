@@ -11,7 +11,7 @@ namespace CreatureAI
     /// [ループ]
     ///   到着(MovementController.IsAtTarget) かつ Goal あり
     ///     → 到着した瞬間に CreaturePoint.Occupy()(Reserved→Occupied)
-    ///     → 毎 Tick、対応する Need を actionRecoverRate で回復(NeedsController.Satisfy)
+    ///     → 毎 Tick、対応する Need を Profile.decreaseRate[Need] で回復(NeedsController.Satisfy)
     ///   Brain 側のヒステリシスで、その Need が満たされると Goal が None になる
     ///     → 行動条件が崩れるので Action を終了(ログ)。占有の解放は TargetSelector が
     ///       Goal 変更を検知して行う(解放経路は Release に一本化)。
@@ -75,9 +75,10 @@ namespace CreatureAI
                 Debug.Log("[Action] " + name + " started " + GoalName(goal) + " at '" + tp.name + "'");
             }
 
-            // 対応する欲求を時間で回復。
-            float rate = (profile != null) ? profile.actionRecoverRate : fallbackRecoverRate;
-            if (dt > 0f) needsController.Satisfy(NeedForGoal(goal), rate * dt);
+            // 対応する欲求を、その Need の decreaseRate で回復。
+            NeedType nt = NeedForGoal(goal);
+            float rate = (profile != null) ? profile.GetDecreaseRate(nt) : fallbackRecoverRate;
+            if (dt > 0f) needsController.Satisfy(nt, rate * dt);
         }
 
         private void EndAction()

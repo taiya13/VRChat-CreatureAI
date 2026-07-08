@@ -40,9 +40,15 @@ namespace CreatureAI
             lastGrowTime = now;
             if (dt <= 0f) return;
 
-            // この Phase で増加させるのは2つのみ(他の Need は 0 のまま)。
-            needsData.AddClamped(NeedType.Hunger, profile.hungerGrowthRate * dt);
-            needsData.AddClamped(NeedType.Sleepiness, profile.sleepinessGrowthRate * dt);
+            // 全 Need を、それぞれの increaseRate で増やす(0 の Need は増えない)。
+            // Water/Fun/Social を足しても、増加速度を設定するだけで自動的に働く。
+            int count = needsData.GetNeedCount();
+            for (int i = 0; i < count; i++)
+            {
+                NeedType nt = (NeedType)i;
+                float rate = profile.GetIncreaseRate(nt);
+                if (rate != 0f) needsData.AddClamped(nt, rate * dt);
+            }
         }
 
         // ================= 充足 API(後フェーズの ActionRunner が使う) =================

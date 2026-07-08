@@ -44,7 +44,7 @@ namespace CreatureAI
         /// 現在の Need から CurrentGoal を再評価する(低頻度 Tick から呼ばれる)。
         ///
         /// ヒステリシス:
-        ///   ・待機中は、最優先 Need の値が「行動しきい値(Profile.actionThreshold)」以上に
+        ///   ・待機中は、最優先 Need の値が「行動しきい値(Profile.threshold[Need])」以上に
         ///     溜まったら、対応する Goal を開始する。
         ///   ・行動中は、その Need が CompleteLevel 以下に回復するまで同じ Goal を維持する
         ///     (食べ始めたら満たされるまで食べ続ける)。回復しきったら Goal を手放して再評価。
@@ -52,8 +52,6 @@ namespace CreatureAI
         public void Evaluate()
         {
             if (needsData == null) return;
-
-            float threshold = (profile != null) ? profile.actionThreshold : FallbackThreshold;
 
             // --- 行動中: 完了するまで現在の Goal を維持(ヒステリシス) ---
             if (currentGoal != Goal.None)
@@ -88,15 +86,15 @@ namespace CreatureAI
             lastBestScore = bestScore;
 
             float bestValue = needsData.GetValue(best);
-            Goal newGoal = (bestValue >= threshold) ? GoalForNeed(best) : Goal.None;
+            float th = (profile != null) ? profile.GetThreshold(best) : FallbackThreshold;
+            Goal newGoal = (bestValue >= th) ? GoalForNeed(best) : Goal.None;
 
             if (newGoal != currentGoal)
             {
                 currentGoal = newGoal;
                 Debug.Log("[Brain] " + name + " current goal: " + GoalName(newGoal) +
-                    "  (Hunger=" + Round1(needsData.GetValue(NeedType.Hunger)) +
-                    ", Sleepiness=" + Round1(needsData.GetValue(NeedType.Sleepiness)) +
-                    ", th=" + Round1(threshold) + ")");
+                    "  (top=" + NeedName(best) + " " + Round1(bestValue) +
+                    ", th=" + Round1(th) + ")");
             }
         }
 
@@ -165,15 +163,7 @@ namespace CreatureAI
         private float GetWeight(NeedType type)
         {
             if (profile == null) return 1f;
-            switch (type)
-            {
-                case NeedType.Hunger: return profile.hungerWeight;
-                case NeedType.Sleepiness: return profile.sleepWeight;
-                case NeedType.Thirst: return profile.thirstWeight;
-                case NeedType.Playfulness: return profile.playWeight;
-                case NeedType.Affection: return profile.affectionWeight;
-                default: return 1f;
-            }
+            return profile.GetWeight(type);
         }
 
         // ================= ログ用ヘルパー =================
