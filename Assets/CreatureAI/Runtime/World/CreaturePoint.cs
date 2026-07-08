@@ -32,8 +32,9 @@ namespace CreatureAI
 
         [Header("検索")]
         [Min(0.5f)]
-        [Tooltip("猫がこの地点を認識できる半径(m)。下限は 0.5m にクランプされる。")]
-        public float searchRadius = 5.0f;
+        [Tooltip("猫がこの地点を『目的地の候補』として選べる最大距離(m)。" +
+                 "これより遠いと候補から外れる。既定は広め(50m)。狭くすると近くの地点しか選ばない。")]
+        public float searchRadius = 50.0f;
 
         [Header("移行管理")]
         [Tooltip("将来タグ体系を変更する際の移行用。通常は変更しない(仕様 5章)。")]

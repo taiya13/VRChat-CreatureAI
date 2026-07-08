@@ -127,8 +127,11 @@ namespace CreatureAI.EditorTools
         [MenuItem("CreatureAI/2. テスト用の猫を作成", false, 2)]
         public static void CreateTestSceneObjects()
         {
-            // 念のため壊れアセットを黙って掃除(辞書汚染で AddComponent が落ちるのを防ぐ)。
-            CleanupBrokenProgramAssets(false);
+            // 壊れアセットを掃除(辞書汚染で AddComponent が「Value cannot be null. key」で
+            // 落ちるのを防ぐ)。削除したものはログに出す。
+            int cleaned = CleanupBrokenProgramAssets(true);
+            if (cleaned > 0)
+                Debug.Log("[CreatureAI Setup] 組み立て前に壊れ Program Asset を " + cleaned + " 個掃除しました。");
 
             System.Text.StringBuilder missing = new System.Text.StringBuilder();
             foreach (Type t in BehaviourTypes)
@@ -503,7 +506,12 @@ namespace CreatureAI.EditorTools
 
         // ================= Program Asset ヘルパー =================
 
-        /// <summary>ソース未設定の壊れた ProgramAsset を削除して数を返す。</summary>
+        /// <summary>
+        /// 壊れた ProgramAsset を削除して数を返す。
+        /// 「ソース未設定(sourceCsScript=None)」だけでなく「ソースはあるがクラス解決が null」
+        /// も対象にする。どちらも UdonSharp の内部辞書(クラス→アセット)を null キーで
+        /// 汚染し、以後の全 AddComponent を「Value cannot be null. key」で失敗させるため。
+        /// </summary>
         private static int CleanupBrokenProgramAssets(bool log)
         {
             int removed = 0;
@@ -511,9 +519,13 @@ namespace CreatureAI.EditorTools
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 UdonSharpProgramAsset pa = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(path);
-                if (pa != null && pa.sourceCsScript == null)
+                if (pa == null) continue;
+
+                bool broken = (pa.sourceCsScript == null) || (pa.sourceCsScript.GetClass() == null);
+                if (broken)
                 {
-                    if (log) Debug.LogWarning("[CreatureAI Setup] 壊れた Program Asset を削除: " + path);
+                    if (log) Debug.LogWarning("[CreatureAI Setup] 壊れた Program Asset を削除: " + path +
+                        (pa.sourceCsScript == null ? " (source=None)" : " (class=null)"));
                     AssetDatabase.DeleteAsset(path);
                     removed++;
                 }
@@ -529,7 +541,7 @@ namespace CreatureAI.EditorTools
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 UdonSharpProgramAsset pa = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(path);
-                if (pa != null && pa.sourceCsScript == null)
+                if (pa != null && (pa.sourceCsScript == null || pa.sourceCsScript.GetClass() == null))
                 {
                     if (log) Debug.LogWarning("[CreatureAI 診断] 壊れ: " + path);
                     n++;
