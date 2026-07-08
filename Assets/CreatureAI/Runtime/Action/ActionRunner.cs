@@ -64,9 +64,17 @@ namespace CreatureAI
 
             if (brain == null || targetSelector == null || movement == null || needsController == null) return;
 
-            CreaturePoint tp = targetSelector.GetTargetPoint();
             Goal goal = brain.GetCurrentGoal();
 
+            // 逃走中は地点行動をしない(移動は MovementController が担当)。状態は Moving 扱い。
+            if (goal == Goal.Flee)
+            {
+                if (acting) EndAction();
+                state = AgentState.Moving;
+                return;
+            }
+
+            CreaturePoint tp = targetSelector.GetTargetPoint();
             bool canAct = (tp != null) && (goal != Goal.None) && movement.IsAtTarget();
 
             if (!canAct)
@@ -85,13 +93,13 @@ namespace CreatureAI
                 acting = true;
                 actingGoal = goal;
                 tp.Occupy(); // Reserved → Occupied(デバッグ表示が赤になる)
-                Debug.Log("[Action] " + name + " started " + GoalName(goal) + " at '" + tp.name + "'");
+                Debug.Log("[Action] " + name + " started " + brain.GoalName(goal) + " at '" + tp.name + "'");
             }
 
             state = AgentState.Acting;
 
             // 対応する欲求を、その Need の decreaseRate で回復。
-            NeedType nt = NeedForGoal(goal);
+            NeedType nt = brain.NeedForGoal(goal);
             float rate = (profile != null) ? profile.GetDecreaseRate(nt) : fallbackRecoverRate;
             if (dt > 0f) needsController.Satisfy(nt, rate * dt);
         }
@@ -112,7 +120,7 @@ namespace CreatureAI
 
         private void EndAction()
         {
-            Debug.Log("[Action] " + name + " finished " + GoalName(actingGoal));
+            Debug.Log("[Action] " + name + " finished " + ((brain != null) ? brain.GoalName(actingGoal) : "?"));
             acting = false;
             actingGoal = Goal.None;
         }
@@ -120,10 +128,16 @@ namespace CreatureAI
         // ================= 参照(デバッグ表示用) =================
 
         public bool IsActing() { return acting; }
-        public string GetActionStateName() { return acting ? GoalName(actingGoal) : "-"; }
+        public string GetActionStateName()
+        {
+            return acting ? ((brain != null) ? brain.GoalName(actingGoal) : "?") : "-";
+        }
 
         /// <summary>今まさに行動中の対象 Need(空腹を食べている等)。NeedsController が増加を止めるのに使う。</summary>
-        public NeedType GetActingNeed() { return NeedForGoal(actingGoal); }
+        public NeedType GetActingNeed()
+        {
+            return (brain != null) ? brain.NeedForGoal(actingGoal) : NeedType.Hunger;
+        }
 
         /// <summary>明示的なエージェント状態(Idle/Moving/Acting)。</summary>
         public AgentState GetState() { return state; }
@@ -138,32 +152,6 @@ namespace CreatureAI
             }
         }
 
-        // ================= ヘルパー =================
-
-        private NeedType NeedForGoal(Goal goal)
-        {
-            switch (goal)
-            {
-                case Goal.Eat: return NeedType.Hunger;
-                case Goal.Sleep: return NeedType.Sleepiness;
-                case Goal.Drink: return NeedType.Thirst;
-                case Goal.Play: return NeedType.Playfulness;
-                case Goal.SeekAffection: return NeedType.Affection;
-                default: return NeedType.Hunger;
-            }
-        }
-
-        private string GoalName(Goal g)
-        {
-            switch (g)
-            {
-                case Goal.Eat: return "Eat";
-                case Goal.Drink: return "Drink";
-                case Goal.Sleep: return "Sleep";
-                case Goal.Play: return "Play";
-                case Goal.SeekAffection: return "SeekAffection";
-                default: return "None";
-            }
-        }
+        // 対応表(GoalName / NeedForGoal)は CreatureBrain に一本化した(重複排除)。
     }
 }

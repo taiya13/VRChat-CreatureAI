@@ -78,6 +78,22 @@ namespace CreatureAI.EditorTools
             int cands = 0;
             Vector3 targetPos = pos;
             bool hasTarget = false;
+            string threatLine = "";
+
+            // 危険範囲(threatDistance)の可視化。config 値は編集時も読める。
+            ThreatEvaluator te = c.GetComponent<ThreatEvaluator>();
+            if (te != null)
+            {
+                bool threatened = false;
+                if (Application.isPlaying)
+                {
+                    object thv = GetVar(te, "threatened");
+                    threatened = (thv != null) && (bool)thv;
+                }
+                Gizmos.color = threatened ? OccupiedColor : new Color(1f, 0.5f, 0.5f, 0.25f);
+                Gizmos.DrawWireSphere(pos, Mathf.Max(0.1f, te.threatDistance));
+                threatLine = "\nThreat: " + (threatened ? "YES" : "no") + " (r=" + te.threatDistance + ")";
+            }
 
             if (Application.isPlaying)
             {
@@ -106,7 +122,8 @@ namespace CreatureAI.EditorTools
             string label = c.name + "   [" + agentState + "]" +
                 "\nGoal: " + goal + "   (top: " + reason + ")" +
                 "\nTarget: " + target +
-                "\nCandidates: " + cands;
+                "\nCandidates: " + cands +
+                threatLine;
             DrawLabel(pos + Vector3.up * 0.6f, label, CatColor);
 
             if (hasTarget)
@@ -168,6 +185,7 @@ namespace CreatureAI.EditorTools
                 case 3: return "Sleep";
                 case 4: return "Play";
                 case 5: return "SeekAffection";
+                case 6: return "Flee";
                 default: return "None";
             }
         }

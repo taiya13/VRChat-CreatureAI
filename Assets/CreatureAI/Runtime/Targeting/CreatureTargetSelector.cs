@@ -107,23 +107,15 @@ namespace CreatureAI
             lastLogGoal = goal;
             lastLogTarget = tp;
 
+            string goalName = (brain != null) ? brain.GoalName(goal) : "?";
             if (tp != null)
-                Debug.Log("[Target] " + name + " reserved '" + tp.name + "' for goal " + GoalName(goal));
-            else if (goal != Goal.None)
-                Debug.Log("[Target] " + name + " goal=" + GoalName(goal) + " だが利用可能なポイントが無い");
+                Debug.Log("[Target] " + name + " reserved '" + tp.name + "' for goal " + goalName);
+            // Flee は地点を使わないので「ポイント無し」は正常。ログしない。
+            else if (goal != Goal.None && goal != Goal.Flee)
+                Debug.Log("[Target] " + name + " goal=" + goalName + " だが利用可能なポイントが無い");
         }
 
-        private string GoalName(Goal g)
-        {
-            switch (g)
-            {
-                case Goal.Eat: return "Eat";
-                case Goal.Drink: return "Drink";
-                case Goal.Sleep: return "Sleep";
-                case Goal.Play: return "Play";
-                case Goal.SeekAffection: return "SeekAffection";
-                default: return "None";
-            }
-        }
+        // GoalName は CreatureBrain に一本化した(重複排除)。PointTypeForGoal は
+        // 「Goal→地点種別」の対応で TargetSelector 固有のため、ここに置いたまま。
     }
 }

@@ -29,8 +29,13 @@ namespace CreatureAI
         [Tooltip("moveSpeed の取得元が無い場合のフォールバック速度(m/s)。")]
         public float fallbackSpeed = 1.5f;
 
+        [Tooltip("逃走時の速度倍率(通常移動速度に掛ける)。")]
+        public float fleeSpeedMultiplier = 1.6f;
+
         private CreatureTargetSelector targetSelector;
         private CreatureProfile profile;
+        private CreatureBrain brain;
+        private ThreatEvaluator threat;
 
         private CreaturePoint lastTarget = null;
         private bool arrived = false;
@@ -40,11 +45,21 @@ namespace CreatureAI
             // 自己初期化(Update 駆動なので Core 注入に依存せず自前で参照を取る)。
             targetSelector = GetComponent<CreatureTargetSelector>();
             profile = GetComponentInChildren<CreatureProfile>();
+            brain = GetComponent<CreatureBrain>();
+            threat = GetComponent<ThreatEvaluator>();
         }
 
         void Update()
         {
             if (targetSelector == null) return;
+
+            // 逃走中は TargetPoint を使わず、脅威源から離れる方向へ走る。
+            if (brain != null && threat != null &&
+                brain.GetCurrentGoal() == Goal.Flee && threat.IsThreatened())
+            {
+                FleeFrom(threat.GetThreatPosition());
+                return;
+            }
 
             CreaturePoint tp = targetSelector.GetTargetPoint();
             if (tp == null)
@@ -108,5 +123,35 @@ namespace CreatureAI
 
         /// <summary>移動中(ターゲットあり・未到着)か。</summary>
         public bool IsMoving() { return targetSelector != null && targetSelector.HasTarget() && !arrived; }
+
+        /// <summary>脅威源から離れる方向へ、通常より速く走る(逃走)。</summary>
+        private void FleeFrom(Vector3 threatPos)
+        {
+            arrived = false;
+            lastTarget = null;
+
+            Vector3 pos = transform.position;
+            Vector3 away = new Vector3(pos.x - threatPos.x, 0f, pos.z - threatPos.z);
+            float d = away.magnitude;
+
+            Vector3 dir;
+            if (d < 0.001f)
+            {
+                // 真上など縮退時は現在の前方へ(それも無ければ +Z)。
+                dir = new Vector3(transform.forward.x, 0f, transform.forward.z);
+                if (dir.sqrMagnitude < 0.001f) dir = Vector3.forward;
+                dir = dir.normalized;
+            }
+            else
+            {
+                dir = away / d;
+            }
+
+            float speed = ((profile != null) ? profile.moveSpeed : fallbackSpeed) * fleeSpeedMultiplier;
+            transform.position = pos + dir * speed * Time.deltaTime;
+
+            Quaternion look = Quaternion.LookRotation(dir, Vector3.up);
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, look, turnSpeed * Time.deltaTime);
+        }
     }
 }

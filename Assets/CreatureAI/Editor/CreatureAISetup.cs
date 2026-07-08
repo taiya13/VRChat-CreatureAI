@@ -33,6 +33,7 @@ namespace CreatureAI.EditorTools
             typeof(CreatureTargetSelector),
             typeof(MovementController),
             typeof(ActionRunner),
+            typeof(ThreatEvaluator),
             typeof(CreatureStatusDisplay),
             typeof(CreaturePointStatusDisplay),
             typeof(Billboard),
@@ -164,6 +165,7 @@ namespace CreatureAI.EditorTools
             AddUdonSharp<CreatureTargetSelector>(cat);
             AddUdonSharp<MovementController>(cat);
             AddUdonSharp<ActionRunner>(cat);
+            AddUdonSharp<ThreatEvaluator>(cat);
             AddUdonSharp<CreaturePointSensor>(cat);
 
             // 見える体(差し替え可能: この Body を消して好きなモデルを Cat の子に置けばよい)。

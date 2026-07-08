@@ -53,6 +53,9 @@ namespace CreatureAI
         {
             if (needsData == null) return;
 
+            // Flee 中は Core(割込み制御)が管理する。ここでは触らない。
+            if (currentGoal == Goal.Flee) return;
+
             // --- 行動中: 完了するまで現在の Goal を維持(ヒステリシス) ---
             if (currentGoal != Goal.None)
             {
@@ -100,6 +103,28 @@ namespace CreatureAI
 
         public Goal GetCurrentGoal() { return currentGoal; }
 
+        // ================= 割込み(Core の危険回避制御から呼ばれる) =================
+
+        /// <summary>危険検知時に Goal を強制的に Flee にする(ヒステリシスを飛び越える)。</summary>
+        public void ForceFlee()
+        {
+            if (currentGoal != Goal.Flee)
+            {
+                currentGoal = Goal.Flee;
+                Debug.Log("[Brain] " + name + " INTERRUPT → Flee");
+            }
+        }
+
+        /// <summary>危険が去ったら Flee を解除して通常の再評価に戻す。</summary>
+        public void EndFlee()
+        {
+            if (currentGoal == Goal.Flee)
+            {
+                currentGoal = Goal.None;
+                Debug.Log("[Brain] " + name + " flee end → re-evaluate");
+            }
+        }
+
         /// <summary>現在の Goal を表示用の文字列で返す(状態表示 UI 等が使う)。</summary>
         public string GetCurrentGoalName() { return GoalName(currentGoal); }
 
@@ -146,8 +171,11 @@ namespace CreatureAI
             }
         }
 
-        /// <summary>Goal に対応する Need(GoalForNeed の逆)。ヒステリシス判定に使う。</summary>
-        private NeedType NeedForGoal(Goal goal)
+        /// <summary>
+        /// Goal に対応する Need(GoalForNeed の逆)。ヒステリシス判定に使う。
+        /// 対応表の重複を避けるため public にし、ActionRunner もこれを使う(唯一の定義)。
+        /// </summary>
+        public NeedType NeedForGoal(Goal goal)
         {
             switch (goal)
             {
@@ -168,8 +196,11 @@ namespace CreatureAI
 
         // ================= ログ用ヘルパー =================
 
-        /// <summary>enum.ToString() は Udon で名前を返さないことがあるため自前で名前化する。</summary>
-        private string GoalName(Goal g)
+        /// <summary>
+        /// Goal の表示名。enum.ToString() は Udon で名前を返さないため自前で名前化する。
+        /// 対応表の重複を避けるため public にし、ActionRunner / TargetSelector もこれを使う(唯一の定義)。
+        /// </summary>
+        public string GoalName(Goal g)
         {
             switch (g)
             {
@@ -178,6 +209,7 @@ namespace CreatureAI
                 case Goal.Sleep: return "Sleep";
                 case Goal.Play: return "Play";
                 case Goal.SeekAffection: return "SeekAffection";
+                case Goal.Flee: return "Flee";
                 default: return "None";
             }
         }

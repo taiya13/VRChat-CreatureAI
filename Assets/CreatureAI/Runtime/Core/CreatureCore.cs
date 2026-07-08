@@ -35,6 +35,7 @@ namespace CreatureAI
         [HideInInspector] public CreatureTargetSelector targetSelector;
         [HideInInspector] public MovementController movementController;
         [HideInInspector] public ActionRunner actionRunner;
+        [HideInInspector] public ThreatEvaluator threatEvaluator;
         [HideInInspector] public CreaturePointSensor pointSensor;
         [HideInInspector] public CreatureStatusDisplay statusDisplay;
         [HideInInspector] public CreatureProfile profile;
@@ -53,6 +54,7 @@ namespace CreatureAI
             targetSelector = GetComponent<CreatureTargetSelector>();
             movementController = GetComponent<MovementController>();
             actionRunner = GetComponent<ActionRunner>();
+            threatEvaluator = GetComponent<ThreatEvaluator>();
             pointSensor = GetComponent<CreaturePointSensor>();
             statusDisplay = GetComponentInChildren<CreatureStatusDisplay>();
             profile = GetComponentInChildren<CreatureProfile>();
@@ -85,9 +87,29 @@ namespace CreatureAI
         {
             tickCounter++;
 
+            // 最優先・毎 Tick: 危険検知と割込み(Threat → AbortCurrent → Goal切替)。
+            //   反応速度が要るので低頻度ブロックには入れず毎 Tick 評価する。
+            if (threatEvaluator != null)
+            {
+                threatEvaluator.Check();
+                if (brain != null)
+                {
+                    bool threatened = threatEvaluator.IsThreatened();
+                    Goal g = brain.GetCurrentGoal();
+                    if (threatened && g != Goal.Flee)
+                    {
+                        if (actionRunner != null) actionRunner.AbortCurrent(); // 現在の行動・予約を安全に畳む
+                        brain.ForceFlee();                                     // Goal を Flee へ
+                    }
+                    else if (!threatened && g == Goal.Flee)
+                    {
+                        brain.EndFlee(); // 危険が去ったら通常評価へ戻す
+                    }
+                }
+            }
+
             // 中頻度: 近傍候補の更新(Sensor 側でも間隔スロットリングされる)。
             if (pointSensor != null) pointSensor.RefreshIfNeeded();
-            // Phase 2+: threatEvaluator.Check();
 
             // 低頻度: 欲求増加 → 意思決定 → ターゲット選択(この順序)。
             if (tickCounter % 5 == 0)

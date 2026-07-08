@@ -18,5 +18,7 @@ namespace CreatureAI
         Sleep = 3,
         Play = 4,
         SeekAffection = 5,
+        // 割込み系(Need には対応しない特別な Goal)。危険回避で最優先になる。
+        Flee = 6,
     }
 }
