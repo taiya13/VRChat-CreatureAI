@@ -48,6 +48,7 @@ namespace CreatureAI
             string target = (targetSelector != null) ? targetSelector.GetTargetPointName() : "-";
             int cands = (sensor != null) ? sensor.GetCandidateCount() : 0;
             string action = (actionRunner != null) ? actionRunner.GetActionStateName() : "-";
+            string agentState = (actionRunner != null) ? actionRunner.GetStateName() : "-";
 
             // 判断根拠: 最優先 Need とそのスコア(値×重み)。
             string reason = "-";
@@ -58,7 +59,7 @@ namespace CreatureAI
             float sleep = (needsData != null) ? needsData.GetValue(NeedType.Sleepiness) : 0f;
 
             string s =
-                "<b>" + displayName + "</b>\n" +
+                "<b>" + displayName + "</b>   [" + agentState + "]\n" +
                 "Goal   : " + goal + "   (top: " + reason + ")\n" +
                 "Target : " + target + "\n" +
                 "Action : " + action + "   Cands: " + cands + "\n" +

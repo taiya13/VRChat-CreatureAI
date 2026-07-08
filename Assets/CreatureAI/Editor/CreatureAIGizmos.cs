@@ -74,6 +74,7 @@ namespace CreatureAI.EditorTools
             string goal = "None";
             string reason = "-";
             string target = "-";
+            string agentState = "-";
             int cands = 0;
             Vector3 targetPos = pos;
             bool hasTarget = false;
@@ -83,6 +84,10 @@ namespace CreatureAI.EditorTools
                 CreatureBrain brain = c.GetComponent<CreatureBrain>();
                 CreatureTargetSelector sel = c.GetComponent<CreatureTargetSelector>();
                 CreaturePointSensor sen = c.GetComponent<CreaturePointSensor>();
+                ActionRunner act = c.GetComponent<ActionRunner>();
+
+                object stv = GetVar(act, "state");
+                if (stv != null) agentState = AgentStateName(SafeInt(stv));
 
                 object gv = GetVar(brain, "currentGoal");
                 if (gv != null) goal = GoalName(SafeInt(gv));
@@ -98,7 +103,7 @@ namespace CreatureAI.EditorTools
                 if (cc != null) cands = SafeInt(cc);
             }
 
-            string label = c.name +
+            string label = c.name + "   [" + agentState + "]" +
                 "\nGoal: " + goal + "   (top: " + reason + ")" +
                 "\nTarget: " + target +
                 "\nCandidates: " + cands;
@@ -164,6 +169,16 @@ namespace CreatureAI.EditorTools
                 case 4: return "Play";
                 case 5: return "SeekAffection";
                 default: return "None";
+            }
+        }
+
+        private static string AgentStateName(int s)
+        {
+            switch (s)
+            {
+                case 1: return "Moving";
+                case 2: return "Acting";
+                default: return "Idle";
             }
         }
 

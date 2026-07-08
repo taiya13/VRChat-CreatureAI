@@ -96,6 +96,16 @@ namespace CreatureAI
         /// <summary>現在の TargetPoint に到着済みか(後フェーズの ActionRunner が参照)。</summary>
         public bool IsAtTarget() { return arrived; }
 
+        /// <summary>
+        /// 到着状態をリセットする(ActionRunner.AbortCurrent から呼ばれる)。
+        /// 中断後に同じ地点を選び直しても、再度きちんと「移動→到着」を踏むようにする。
+        /// </summary>
+        public void ResetArrival()
+        {
+            arrived = false;
+            lastTarget = null;
+        }
+
         /// <summary>移動中(ターゲットあり・未到着)か。</summary>
         public bool IsMoving() { return targetSelector != null && targetSelector.HasTarget() && !arrived; }
     }

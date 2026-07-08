@@ -17,6 +17,14 @@ namespace CreatureAI
     ///       Goal 変更を検知して行う(解放経路は Release に一本化)。
     ///
     /// [接続] 到着 → Occupy → 回復 → (満足で)Goal 解除 → Release → Brain 再評価、という流れ。
+    ///
+    /// [ライフサイクルの所有(将来の割込みに向けた整理)]
+    ///   ・予約(Reserve)と解放(Release)の"プリミティブ"は TargetSelector が握る
+    ///     (TargetSelector.ReleaseTarget が唯一の解放入口)。
+    ///   ・占有(Occupy)と行動の実行・状態(AgentState)は ActionRunner が握る。
+    ///   ・AbortCurrent() が「行動・移動・予約をまとめて畳む単一の中断経路」。
+    ///     将来 Flee/危険回避はこれを呼ぶだけで解放漏れが起きない
+    ///     (現状ではどこからも呼ばれず、動作は不変)。
     /// </summary>
     public class ActionRunner : UdonSharpBehaviour
     {
@@ -32,6 +40,9 @@ namespace CreatureAI
         private bool acting = false;
         private Goal actingGoal = Goal.None;
         private float lastTime = -1f;
+
+        // 明示的なエージェント状態(観測用。判断はしない)。
+        private AgentState state = AgentState.Idle;
 
         public void Initialize(CreatureBrain b, CreatureTargetSelector s, MovementController m,
             NeedsController n, CreatureProfile p)
@@ -61,6 +72,8 @@ namespace CreatureAI
             if (!canAct)
             {
                 if (acting) EndAction();
+                // 目的地があり移動中なら Moving、無ければ Idle。
+                state = (tp != null && goal != Goal.None) ? AgentState.Moving : AgentState.Idle;
                 return;
             }
 
@@ -75,10 +88,26 @@ namespace CreatureAI
                 Debug.Log("[Action] " + name + " started " + GoalName(goal) + " at '" + tp.name + "'");
             }
 
+            state = AgentState.Acting;
+
             // 対応する欲求を、その Need の decreaseRate で回復。
             NeedType nt = NeedForGoal(goal);
             float rate = (profile != null) ? profile.GetDecreaseRate(nt) : fallbackRecoverRate;
             if (dt > 0f) needsController.Satisfy(nt, rate * dt);
+        }
+
+        /// <summary>
+        /// 現在の行動・移動・予約をまとめて中断する単一経路(仕様3.2 AbortCurrent 相当)。
+        /// 行動停止 → 予約解放(TargetSelector) → 到着状態リセット(Movement) → Idle。
+        /// 将来の割込み(Flee/危険回避)はこれ 1 つを呼べば解放漏れが起きない。
+        /// 何度呼んでも安全(冪等)。※現状は未使用のため既存動作に影響しない。
+        /// </summary>
+        public void AbortCurrent()
+        {
+            if (acting) EndAction();
+            if (targetSelector != null) targetSelector.ReleaseTarget();
+            if (movement != null) movement.ResetArrival();
+            state = AgentState.Idle;
         }
 
         private void EndAction()
@@ -95,6 +124,19 @@ namespace CreatureAI
 
         /// <summary>今まさに行動中の対象 Need(空腹を食べている等)。NeedsController が増加を止めるのに使う。</summary>
         public NeedType GetActingNeed() { return NeedForGoal(actingGoal); }
+
+        /// <summary>明示的なエージェント状態(Idle/Moving/Acting)。</summary>
+        public AgentState GetState() { return state; }
+
+        public string GetStateName()
+        {
+            switch (state)
+            {
+                case AgentState.Moving: return "Moving";
+                case AgentState.Acting: return "Acting";
+                default: return "Idle";
+            }
+        }
 
         // ================= ヘルパー =================
 
