@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using UdonSharp;
 using UdonSharpEditor;
 using UnityEditor;
@@ -112,6 +113,7 @@ namespace CreatureAI.EditorTools
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             UdonSharpProgramAsset.CompileAllCsPrograms(true);
+            ResetUdonSharpCaches(); // コンパイル後にキャッシュを作り直しておく
 
             string msg = "壊れアセット削除 " + cleaned + "\n" +
                          "Program Asset: 新規 " + created + " / 修復 " + repaired +
@@ -158,6 +160,11 @@ namespace CreatureAI.EditorTools
             // --- Cat 本体 ---
             GameObject cat = new GameObject("Cat");
             Undo.RegisterCreatedObjectUndo(cat, "Create CreatureAI Cat");
+            // 直前に UdonSharp の型ルックアップキャッシュを作り直す。
+            // 新規スクリプトを足したフェーズで「Value cannot be null. key」が出るのは、
+            // 新アセットが未登録の古いキャッシュを使ってしまうため。ここでリセットすれば根絶できる。
+            ResetUdonSharpCaches();
+
             AddUdonSharp<CreatureCore>(cat);
             AddUdonSharp<NeedsController>(cat);
             AddUdonSharp<NeedsData>(cat);
@@ -369,9 +376,29 @@ namespace CreatureAI.EditorTools
             catch (Exception e)
             {
                 Debug.LogError("[CreatureAI Setup] " + typeof(T).Name + " のセットアップに失敗: " + e.Message +
-                    "\n→ メニュー1(壊れアセット掃除込み)を実行後、もう一度お試しください。");
+                    "\n→ メニュー1を実行してコンパイル完了を待ってから、もう一度お試しください。");
             }
             return proxy;
+        }
+
+        /// <summary>
+        /// UdonSharp の内部キャッシュ(クラス→ProgramAsset 辞書)をリフレクションで作り直す。
+        /// 新規スクリプトを足したフェーズで CreateBehaviourForProxy が古い辞書を使い、
+        /// 新アセットを見つけられず「Value cannot be null. key」になるのを防ぐ。
+        /// internal メソッドのため反射で呼ぶ。存在しない/失敗しても安全にスキップする。
+        /// </summary>
+        private static void ResetUdonSharpCaches()
+        {
+            try
+            {
+                MethodInfo m = typeof(UdonSharpEditorUtility).GetMethod(
+                    "ResetCaches", BindingFlags.NonPublic | BindingFlags.Static);
+                if (m != null) m.Invoke(null, null);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[CreatureAI Setup] キャッシュリセットをスキップ: " + e.Message);
+            }
         }
 
         // ================= Program Asset ヘルパー =================
