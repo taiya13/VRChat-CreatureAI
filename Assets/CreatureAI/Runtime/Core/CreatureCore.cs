@@ -36,6 +36,7 @@ namespace CreatureAI
         [HideInInspector] public MovementController movementController;
         [HideInInspector] public ActionRunner actionRunner;
         [HideInInspector] public ThreatEvaluator threatEvaluator;
+        [HideInInspector] public CreatureAnimator creatureAnimator;
         [HideInInspector] public CreaturePointSensor pointSensor;
         [HideInInspector] public CreatureStatusDisplay statusDisplay;
         [HideInInspector] public CreatureProfile profile;
@@ -55,6 +56,7 @@ namespace CreatureAI
             movementController = GetComponent<MovementController>();
             actionRunner = GetComponent<ActionRunner>();
             threatEvaluator = GetComponent<ThreatEvaluator>();
+            creatureAnimator = GetComponent<CreatureAnimator>();
             pointSensor = GetComponent<CreaturePointSensor>();
             statusDisplay = GetComponentInChildren<CreatureStatusDisplay>();
             profile = GetComponentInChildren<CreatureProfile>();
@@ -65,6 +67,7 @@ namespace CreatureAI
             if (brain != null) brain.Initialize(needsData, profile);
             if (targetSelector != null) targetSelector.Initialize(brain, pointSensor);
             if (actionRunner != null) actionRunner.Initialize(brain, targetSelector, movementController, needsController, profile);
+            if (creatureAnimator != null) creatureAnimator.Initialize(brain, actionRunner);
             if (statusDisplay != null) statusDisplay.Initialize(needsData, brain, targetSelector, pointSensor, actionRunner);
 
             if (profile == null)
@@ -121,6 +124,9 @@ namespace CreatureAI
 
             // 行動実行は毎 Tick(到着後の回復を進める)。
             if (actionRunner != null) actionRunner.Tick();
+
+            // 見た目への反映(状態→アニメーション)は毎 Tick。
+            if (creatureAnimator != null) creatureAnimator.UpdateAnimation();
 
             // 表示更新は毎 Tick(滑らかに見せるため)。
             if (statusDisplay != null) statusDisplay.UpdateDisplay();

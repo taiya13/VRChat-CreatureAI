@@ -75,6 +75,7 @@ namespace CreatureAI.EditorTools
             string reason = "-";
             string target = "-";
             string agentState = "-";
+            string motion = "-";
             int cands = 0;
             Vector3 targetPos = pos;
             bool hasTarget = false;
@@ -101,9 +102,13 @@ namespace CreatureAI.EditorTools
                 CreatureTargetSelector sel = c.GetComponent<CreatureTargetSelector>();
                 CreaturePointSensor sen = c.GetComponent<CreaturePointSensor>();
                 ActionRunner act = c.GetComponent<ActionRunner>();
+                CreatureAnimator anm = c.GetComponent<CreatureAnimator>();
 
                 object stv = GetVar(act, "state");
                 if (stv != null) agentState = AgentStateName(SafeInt(stv));
+
+                object mkv = GetVar(anm, "currentKind");
+                if (mkv != null) motion = MotionName(SafeInt(mkv));
 
                 object gv = GetVar(brain, "currentGoal");
                 if (gv != null) goal = GoalName(SafeInt(gv));
@@ -119,7 +124,7 @@ namespace CreatureAI.EditorTools
                 if (cc != null) cands = SafeInt(cc);
             }
 
-            string label = c.name + "   [" + agentState + "]" +
+            string label = c.name + "   [" + agentState + " / " + motion + "]" +
                 "\nGoal: " + goal + "   (top: " + reason + ")" +
                 "\nTarget: " + target +
                 "\nCandidates: " + cands +
@@ -196,6 +201,18 @@ namespace CreatureAI.EditorTools
             {
                 case 1: return "Moving";
                 case 2: return "Acting";
+                default: return "Idle";
+            }
+        }
+
+        private static string MotionName(int m)
+        {
+            switch (m)
+            {
+                case 1: return "Walk";
+                case 2: return "Eat";
+                case 3: return "Sleep";
+                case 4: return "Flee";
                 default: return "Idle";
             }
         }

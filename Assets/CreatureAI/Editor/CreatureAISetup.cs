@@ -3,6 +3,7 @@ using System.Reflection;
 using UdonSharp;
 using UdonSharpEditor;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -35,6 +36,7 @@ namespace CreatureAI.EditorTools
             typeof(MovementController),
             typeof(ActionRunner),
             typeof(ThreatEvaluator),
+            typeof(CreatureAnimator),
             typeof(CreatureStatusDisplay),
             typeof(CreaturePointStatusDisplay),
             typeof(Billboard),
@@ -173,12 +175,24 @@ namespace CreatureAI.EditorTools
             AddUdonSharp<MovementController>(cat);
             AddUdonSharp<ActionRunner>(cat);
             AddUdonSharp<ThreatEvaluator>(cat);
+            CreatureAnimator catAnimator = AddUdonSharp<CreatureAnimator>(cat);
             AddUdonSharp<CreaturePointSensor>(cat);
 
             // 見える体(差し替え可能: この Body を消して好きなモデルを Cat の子に置けばよい)。
             AddVisual(cat, "Body", PrimitiveType.Capsule,
                 new Vector3(0f, 0.35f, 0f), new Vector3(0.35f, 0.35f, 0.35f),
                 new Color(0.95f, 0.6f, 0.2f));
+
+            // Animator と自動生成の AnimatorController を用意して割り当てる。
+            AnimatorController controller = EnsureAnimatorController();
+            Animator anim = Undo.AddComponent<Animator>(cat);
+            anim.applyRootMotion = false;
+            if (controller != null) anim.runtimeAnimatorController = controller;
+            if (catAnimator != null)
+            {
+                catAnimator.animator = anim;
+                EditorUtility.SetDirty(catAnimator);
+            }
 
             GameObject profile = new GameObject("Profile");
             profile.transform.SetParent(cat.transform, false);
@@ -298,6 +312,123 @@ namespace CreatureAI.EditorTools
                 EditorUtility.SetDirty(disp);
             }
             AddUdonSharp<Billboard>(board); // 常にこちらを向く
+        }
+
+        // ================= AnimatorController の自動生成 =================
+
+        private const string GenFolder = "Assets/CreatureAI_Generated";
+        private const string ControllerPath = "Assets/CreatureAI_Generated/CreatureAnimator.controller";
+
+        /// <summary>
+        /// 5状態(Idle/Walk/Eat/Sleep/Flee)+ 整数パラメータ MotionState + AnyState 遷移 の
+        /// AnimatorController を用意する。既にあれば再利用(ユーザーの編集を壊さない)。
+        /// 各状態には「動いて見える」プレースホルダのモーションを入れておく(差し替え前提)。
+        /// </summary>
+        private static AnimatorController EnsureAnimatorController()
+        {
+            try
+            {
+                if (!AssetDatabase.IsValidFolder(GenFolder))
+                    AssetDatabase.CreateFolder("Assets", "CreatureAI_Generated");
+
+                AnimatorController existing = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
+                if (existing != null) return existing; // 再利用
+
+                AnimatorController ac = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+                ac.AddParameter("MotionState", AnimatorControllerParameterType.Int);
+                AnimatorStateMachine sm = ac.layers[0].stateMachine;
+
+                AnimatorState idle = AddAnimState(sm, "Idle",
+                    MakeClip("Idle_ph", "localPosition.y", Bob(2.0f, 0.35f, 0.37f), true), new Vector3(300, 0, 0));
+                AnimatorState walk = AddAnimState(sm, "Walk",
+                    MakeClip("Walk_ph", "localPosition.y", Bob(0.4f, 0.33f, 0.46f), true), new Vector3(300, 60, 0));
+                AnimatorState eat = AddAnimState(sm, "Eat",
+                    MakeClip("Eat_ph", "localPosition.y", Const(0.20f), true), new Vector3(300, 120, 0));
+                AnimatorState sleep = AddAnimState(sm, "Sleep",
+                    MakeClip2("Sleep_ph", "localPosition.y", Const(0.18f), "localScale.y", Const(0.18f), true), new Vector3(300, 180, 0));
+                AnimatorState flee = AddAnimState(sm, "Flee",
+                    MakeClip("Flee_ph", "localPosition.x", Shake(0.18f, 0f, 0.06f), true), new Vector3(300, 240, 0));
+
+                sm.defaultState = idle;
+                AddAnyTransition(sm, idle, 0);
+                AddAnyTransition(sm, walk, 1);
+                AddAnyTransition(sm, eat, 2);
+                AddAnyTransition(sm, sleep, 3);
+                AddAnyTransition(sm, flee, 4);
+
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+                return ac;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[CreatureAI Setup] AnimatorController の自動生成に失敗(手動で割り当ててください): " + e.Message);
+                return null;
+            }
+        }
+
+        private static AnimatorState AddAnimState(AnimatorStateMachine sm, string name, Motion clip, Vector3 pos)
+        {
+            AnimatorState s = sm.AddState(name, pos);
+            s.motion = clip;
+            s.writeDefaultValues = true; // アニメしない項目は既定値に戻す(状態間で干渉しない)
+            return s;
+        }
+
+        private static void AddAnyTransition(AnimatorStateMachine sm, AnimatorState to, int value)
+        {
+            AnimatorStateTransition t = sm.AddAnyStateTransition(to);
+            t.AddCondition(AnimatorConditionMode.Equals, value, "MotionState");
+            t.hasExitTime = false;
+            t.duration = 0.12f;
+            t.canTransitionToSelf = false;
+        }
+
+        private static AnimationClip MakeClip(string name, string prop, AnimationCurve curve, bool loop)
+        {
+            AnimationClip c = new AnimationClip();
+            c.SetCurve("Body", typeof(Transform), prop, curve);
+            SetLoop(c, loop);
+            AssetDatabase.CreateAsset(c, GenFolder + "/" + name + ".anim");
+            return c;
+        }
+
+        private static AnimationClip MakeClip2(string name, string p1, AnimationCurve c1, string p2, AnimationCurve c2, bool loop)
+        {
+            AnimationClip c = new AnimationClip();
+            c.SetCurve("Body", typeof(Transform), p1, c1);
+            c.SetCurve("Body", typeof(Transform), p2, c2);
+            SetLoop(c, loop);
+            AssetDatabase.CreateAsset(c, GenFolder + "/" + name + ".anim");
+            return c;
+        }
+
+        private static void SetLoop(AnimationClip c, bool loop)
+        {
+            AnimationClipSettings s = AnimationUtility.GetAnimationClipSettings(c);
+            s.loopTime = loop;
+            AnimationUtility.SetAnimationClipSettings(c, s);
+        }
+
+        private static AnimationCurve Const(float v)
+        {
+            return new AnimationCurve(new Keyframe(0f, v), new Keyframe(0.5f, v));
+        }
+
+        private static AnimationCurve Bob(float period, float lo, float hi)
+        {
+            return new AnimationCurve(
+                new Keyframe(0f, lo), new Keyframe(period * 0.5f, hi), new Keyframe(period, lo));
+        }
+
+        private static AnimationCurve Shake(float period, float baseV, float amp)
+        {
+            return new AnimationCurve(
+                new Keyframe(0f, baseV),
+                new Keyframe(period * 0.25f, baseV + amp),
+                new Keyframe(period * 0.5f, baseV),
+                new Keyframe(period * 0.75f, baseV - amp),
+                new Keyframe(period, baseV));
         }
 
         private static void SetColor(GameObject go, Color color)
