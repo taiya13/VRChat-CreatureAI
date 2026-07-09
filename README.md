@@ -1,55 +1,25 @@
-# creature_ai_spec3 — VRChat 向け 猫 AI フレームワーク
+## 開発ロードマップ（v1.0）
 
-VRChat SDK3 Worlds + UdonSharp 向けの、猫 AI フレームワーク実装。
-正式仕様は [`docs/creature_ai_spec_v3.1.md`](docs/creature_ai_spec_v3.1.md)(v3.1 凍結版)。
+| Phase | 内容 | 状態 |
+|------|------|------|
+| Phase 1 | CreaturePoint・Needs・Core Tick 基盤 | ✅ 完了 |
+| Phase 2 | ActionRunner・基本行動 | ✅ 完了 |
+| Phase 3 | Brain による意思決定 | ✅ 完了 |
+| Phase 4 | Interrupt（行動割り込み） | ✅ 完了 |
+| Phase 5 | AI基盤リファクタリング・拡張性向上 | ✅ 完了 |
+| Phase 6 | AIアーキテクチャの整理・行動システム安定化 | ✅ 完了 |
+| Phase 7 | 性格・個体差システム | 🚧 開発予定 |
+| Phase 8 | v1.0最終調整（バグ修正・最適化・バランス調整） | ⏳ 予定 |
+| Phase 9 | 演出・アニメーション・生き物らしさの強化 | ⏳ 予定 |
 
-## 実装状況
+## v1.1以降
 
-| フェーズ | 内容 | 状態 |
-|---|---|---|
-| Phase 1 | `CreaturePoint` / `CreaturePointRegistry`(自己選出)/ `CreaturePointSensor` / `NeedsController`(空腹・眠気)/ `CreatureCore` のTickループ | ✅ 実装済み |
-| Phase 2 | 残りの欲求、`ActionRunner` 全行動、占有(Occupied)制御 | 未着手 |
-| Phase 3 | `ThreatEvaluator` / `PlayerRelationshipManager` | 未着手 |
-| Phase 4 | Inspector 警告・Gizmo 等のフェイルセーフ、状態変化ログ | 一部先行実装 |
-| Phase 5 | 個体差・ヒステリシス、NavMesh 移動検討(任意) | 未着手 |
+v1.0では「プレイヤーがいなくても自律的に生活する猫AI」の完成を目標としています。
 
-## フォルダ
+その後は、以下の機能を順次追加予定です。
 
-```
-Assets/CreatureAI/Runtime/{Core,World,Perception,Needs,Common}
-Assets/CreatureAI/Editor
-docs/
-```
-
-Phase 1 の詳細(責務・Inspector 設定・Prefab 構成・動作確認手順)は
-[`docs/Phase1.md`](docs/Phase1.md) を参照。
-
-## 導入
-
-いずれの方法でも、UdonSharp 導入済みの VRChat World プロジェクトに取り込める。
-
-**A. .unitypackage で入れる(推奨)**
-[`dist/CreatureAI_Phase1.unitypackage`](dist/CreatureAI_Phase1.unitypackage) を
-プロジェクトにインポート(Assets > Import Package > Custom Package…)する。
-GUID は固定生成しているため、再インポートしても参照が壊れない。
-
-**B. フォルダごとコピーで入れる**
-`Assets/CreatureAI` を `.meta` ごとプロジェクトの `Assets/` 配下にコピーする。
-`.meta` はコミット済みなので GUID はチーム間で一致する。
-
-インポート後、UdonSharp のコンパイルが通ることを確認してから、
-`docs/Phase1.md` の手順で Cat Prefab を組む。
-
-### .unitypackage の再生成
-`.cs` を追加・変更したら、次で `.meta` 再生成と再パッケージ化ができる。
-```
-python3 Tools/build_unitypackage.py
-```
-GUID はパスの md5 で決定的に決まるため、既存アセットの GUID は保持される。
-
-> **Prefab について**: UdonSharp の Prefab は、各スクリプトの
-> ProgramAsset がプロジェクトごとにインポート時生成される GUID に依存するため、
-> Unity 外で正しい .prefab を手作りすることはできない。現状のパッケージは
-> スクリプト一式を提供し、Cat Prefab は `docs/Phase1.md` の手順で組む方式。
-> Prefab をパッケージに同梱したい場合は、エディタメニューから Cat Prefab を
-> 自動生成するツールを別途用意できる(要相談)。
+- プレイヤー認識
+- プレイヤーとのインタラクション
+- 記憶システム
+- 学習機能
+- ワールドごとの行動カスタマイズ
