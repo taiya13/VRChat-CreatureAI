@@ -80,8 +80,11 @@ namespace CreatureAI
             if (!canAct)
             {
                 if (acting) EndAction();
-                // 目的地があり移動中なら Moving、無ければ Idle。
-                state = (tp != null && goal != Goal.None) ? AgentState.Moving : AgentState.Idle;
+                // 目的地へ移動中、または Idle 徘徊で歩いている間は Moving(歩行アニメ)。
+                if ((tp != null && goal != Goal.None) || movement.IsWandering())
+                    state = AgentState.Moving;
+                else
+                    state = AgentState.Idle;
                 return;
             }
 

@@ -32,6 +32,24 @@ namespace CreatureAI
         [Tooltip("逃走時の速度倍率(通常移動速度に掛ける)。")]
         public float fleeSpeedMultiplier = 1.6f;
 
+        [Header("徘徊(Idle 時のうろうろ)")]
+        [Tooltip("徘徊する範囲の半径(m)。起点(spawn 位置)からこの範囲でランダムに歩き回る。")]
+        public float wanderRadius = 4f;
+        [Tooltip("徘徊時の速度倍率(通常よりゆっくり歩く)。")]
+        public float wanderSpeedMultiplier = 0.5f;
+        [Tooltip("徘徊の到着判定距離(m)。")]
+        public float wanderStopDistance = 0.4f;
+        [Tooltip("徘徊で立ち止まって休む秒数(最小/最大)。")]
+        public float wanderPauseMin = 1.5f;
+        public float wanderPauseMax = 5.0f;
+
+        [Header("逃走の自然さ")]
+        [Tooltip("逃走方向を『真逆』からどれだけランダムにずらすか(度)。")]
+        public float fleeAngleMax = 70f;
+        [Tooltip("逃走方向を切り替える間隔(秒・最小/最大)。ジグザグに逃げる。")]
+        public float fleeRedirectMin = 0.4f;
+        public float fleeRedirectMax = 1.2f;
+
         private CreatureTargetSelector targetSelector;
         private CreatureProfile profile;
         private CreatureBrain brain;
@@ -40,6 +58,17 @@ namespace CreatureAI
         private CreaturePoint lastTarget = null;
         private bool arrived = false;
 
+        // 徘徊の状態。
+        private Vector3 home;
+        private Vector3 wanderTarget;
+        private bool hasWanderTarget = false;
+        private bool wanderActive = false;   // 徘徊で歩いている最中か(休憩中は false)
+        private float wanderPauseUntil = 0f;
+
+        // 逃走の状態。
+        private Vector3 fleeDir;
+        private float fleeRedirectAt = 0f;
+
         void Start()
         {
             // 自己初期化(Update 駆動なので Core 注入に依存せず自前で参照を取る)。
@@ -47,6 +76,8 @@ namespace CreatureAI
             profile = GetComponentInChildren<CreatureProfile>();
             brain = GetComponent<CreatureBrain>();
             threat = GetComponent<ThreatEvaluator>();
+
+            home = transform.position; // 徘徊の起点
         }
 
         void Update()
@@ -64,9 +95,10 @@ namespace CreatureAI
             CreaturePoint tp = targetSelector.GetTargetPoint();
             if (tp == null)
             {
-                // ターゲット無し = 待機。到着状態はリセット。
+                // ターゲット無し = Idle。猫らしく、起点の周りを不規則にうろうろする。
                 lastTarget = null;
                 arrived = false;
+                WanderUpdate();
                 return;
             }
 
@@ -124,7 +156,65 @@ namespace CreatureAI
         /// <summary>移動中(ターゲットあり・未到着)か。</summary>
         public bool IsMoving() { return targetSelector != null && targetSelector.HasTarget() && !arrived; }
 
-        /// <summary>脅威源から離れる方向へ、通常より速く走る(逃走)。</summary>
+        /// <summary>Idle 徘徊で歩いている最中か(ActionRunner が状態を Moving にするのに使う)。</summary>
+        public bool IsWandering() { return wanderActive; }
+
+        // ================= 徘徊(Idle Wander) =================
+
+        /// <summary>
+        /// 起点(home)の周りをランダムに歩き回る。到着したらしばらく休み、また別の地点へ。
+        /// 一定範囲(wanderRadius)に収まるので遠くへ行き過ぎない。
+        /// </summary>
+        private void WanderUpdate()
+        {
+            float now = Time.time;
+
+            // 目的地が無い = 休憩中 or 次の目的地を決める。
+            if (!hasWanderTarget)
+            {
+                if (now < wanderPauseUntil) { wanderActive = false; return; } // 立ち止まって休む
+                PickWanderTarget();
+            }
+
+            Vector3 pos = transform.position;
+            Vector3 flat = new Vector3(wanderTarget.x - pos.x, 0f, wanderTarget.z - pos.z);
+            float dist = flat.magnitude;
+
+            if (dist <= wanderStopDistance)
+            {
+                // 到着 → しばらく休む。
+                hasWanderTarget = false;
+                wanderActive = false;
+                wanderPauseUntil = now + Random.Range(wanderPauseMin, wanderPauseMax);
+                return;
+            }
+
+            wanderActive = true;
+            float speed = ((profile != null) ? profile.moveSpeed : fallbackSpeed) * wanderSpeedMultiplier;
+            Vector3 dir = flat / dist;
+            Vector3 step = dir * speed * Time.deltaTime;
+            if (step.magnitude > dist) step = flat;
+            transform.position = pos + step;
+
+            Quaternion look = Quaternion.LookRotation(dir, Vector3.up);
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, look, turnSpeed * Time.deltaTime);
+        }
+
+        private void PickWanderTarget()
+        {
+            float rx = Random.Range(-wanderRadius, wanderRadius);
+            float rz = Random.Range(-wanderRadius, wanderRadius);
+            wanderTarget = new Vector3(home.x + rx, home.y, home.z + rz);
+            hasWanderTarget = true;
+        }
+
+        // ================= 逃走(Flee) =================
+
+        /// <summary>
+        /// 脅威源から離れる方向へ、通常より速く走る。ただし『真逆一直線』ではなく、
+        /// 一定間隔で逃走方向をランダムにずらしてジグザグに逃げる(生き物らしさ)。
+        /// ずれは常に「離れる側 ±fleeAngleMax 度」に収めるので、相手に突っ込まない。
+        /// </summary>
         private void FleeFrom(Vector3 threatPos)
         {
             arrived = false;
@@ -134,24 +224,46 @@ namespace CreatureAI
             Vector3 away = new Vector3(pos.x - threatPos.x, 0f, pos.z - threatPos.z);
             float d = away.magnitude;
 
-            Vector3 dir;
+            Vector3 awayDir;
             if (d < 0.001f)
             {
-                // 真上など縮退時は現在の前方へ(それも無ければ +Z)。
-                dir = new Vector3(transform.forward.x, 0f, transform.forward.z);
-                if (dir.sqrMagnitude < 0.001f) dir = Vector3.forward;
-                dir = dir.normalized;
+                awayDir = new Vector3(transform.forward.x, 0f, transform.forward.z);
+                if (awayDir.sqrMagnitude < 0.001f) awayDir = Vector3.forward;
+                awayDir = awayDir.normalized;
             }
             else
             {
-                dir = away / d;
+                awayDir = away / d;
+            }
+
+            // 一定間隔で逃走方向を、離れる方向から ±fleeAngleMax 度ずらして選び直す。
+            float now = Time.time;
+            if (now >= fleeRedirectAt || fleeDir.sqrMagnitude < 0.001f)
+            {
+                fleeRedirectAt = now + Random.Range(fleeRedirectMin, fleeRedirectMax);
+                float angle = Random.Range(-fleeAngleMax, fleeAngleMax);
+                fleeDir = RotateY(awayDir, angle);
+            }
+            else
+            {
+                // 相手が動いても突っ込まないよう、現在の逃走方向を少しずつ「離れる方向」へ寄せる。
+                fleeDir = (fleeDir + awayDir * 0.15f).normalized;
             }
 
             float speed = ((profile != null) ? profile.moveSpeed : fallbackSpeed) * fleeSpeedMultiplier;
-            transform.position = pos + dir * speed * Time.deltaTime;
+            transform.position = pos + fleeDir * speed * Time.deltaTime;
 
-            Quaternion look = Quaternion.LookRotation(dir, Vector3.up);
+            Quaternion look = Quaternion.LookRotation(fleeDir, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, look, turnSpeed * Time.deltaTime);
+        }
+
+        /// <summary>水平ベクトルを Y 軸まわりに angle 度回す(Quaternion を使わない軽量版)。</summary>
+        private Vector3 RotateY(Vector3 v, float angleDeg)
+        {
+            float rad = angleDeg * Mathf.Deg2Rad;
+            float cos = Mathf.Cos(rad);
+            float sin = Mathf.Sin(rad);
+            return new Vector3(v.x * cos - v.z * sin, 0f, v.x * sin + v.z * cos);
         }
     }
 }
