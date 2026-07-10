@@ -37,6 +37,7 @@ namespace CreatureAI.EditorTools
             typeof(ActionRunner),
             typeof(ThreatEvaluator),
             typeof(CreatureAnimator),
+            typeof(CreaturePersonality),
             typeof(CreatureStatusDisplay),
             typeof(CreaturePointStatusDisplay),
             typeof(Billboard),
@@ -176,6 +177,7 @@ namespace CreatureAI.EditorTools
             AddUdonSharp<ActionRunner>(cat);
             AddUdonSharp<ThreatEvaluator>(cat);
             CreatureAnimator catAnimator = AddUdonSharp<CreatureAnimator>(cat);
+            AddUdonSharp<CreaturePersonality>(cat);
             AddUdonSharp<CreaturePointSensor>(cat);
 
             // 見える体(差し替え可能: この Body を消して好きなモデルを Cat の子に置けばよい)。
@@ -230,6 +232,68 @@ namespace CreatureAI.EditorTools
                 "ソース未設定の壊れた Program Asset を " + n + " 個削除しました。", "OK");
         }
 
+
+        // ================= 性格プリセット =================
+        // シーン内の全 Cat の性格(CreaturePersonality)をまとめて設定する。
+        // 数値: 臆病さ / 好奇心 / 活発さ / のんびりさ(各 0〜1)。
+
+        [MenuItem("CreatureAI/性格/平均 (ふつう)", false, 100)]
+        public static void PersoAverage() { ApplyPersonality(0.5f, 0.5f, 0.5f, 0.5f, "平均"); }
+
+        [MenuItem("CreatureAI/性格/臆病な猫", false, 101)]
+        public static void PersoTimid() { ApplyPersonality(0.9f, 0.2f, 0.4f, 0.5f, "臆病"); }
+
+        [MenuItem("CreatureAI/性格/元気な猫 (活発)", false, 102)]
+        public static void PersoActive() { ApplyPersonality(0.3f, 0.6f, 0.9f, 0.2f, "元気"); }
+
+        [MenuItem("CreatureAI/性格/のんびり猫", false, 103)]
+        public static void PersoRelaxed() { ApplyPersonality(0.4f, 0.3f, 0.2f, 0.9f, "のんびり"); }
+
+        [MenuItem("CreatureAI/性格/好奇心旺盛な猫", false, 104)]
+        public static void PersoCurious() { ApplyPersonality(0.3f, 0.9f, 0.6f, 0.3f, "好奇心旺盛"); }
+
+        /// <summary>全 CreaturePersonality に性格値を適用する。再生中は即反映。</summary>
+        private static void ApplyPersonality(float timid, float curious, float active, float relax, string label)
+        {
+            CreaturePersonality[] arr = UnityEngine.Object.FindObjectsOfType<CreaturePersonality>();
+            if (arr == null || arr.Length == 0)
+            {
+                EditorUtility.DisplayDialog("CreatureAI",
+                    "シーンに Cat(CreaturePersonality)がありません。\n先に『2. テスト用の猫を作成』で猫を用意してください。", "OK");
+                return;
+            }
+
+            int n = 0;
+            foreach (CreaturePersonality p in arr)
+            {
+                try
+                {
+                    p.timidity = timid; p.curiosity = curious; p.activeness = active; p.relaxedness = relax;
+                    UdonSharpEditorUtility.CopyProxyToUdon(p);
+                    EditorUtility.SetDirty(p);
+                    if (Application.isPlaying)
+                    {
+                        VRC.Udon.UdonBehaviour udon = UdonSharpEditorUtility.GetBackingUdonBehaviour(p);
+                        if (udon != null)
+                        {
+                            udon.SetProgramVariable("timidity", timid);
+                            udon.SetProgramVariable("curiosity", curious);
+                            udon.SetProgramVariable("activeness", active);
+                            udon.SetProgramVariable("relaxedness", relax);
+                        }
+                    }
+                    n++;
+                }
+                catch (Exception e) { Debug.LogError("[CreatureAI] 性格適用に失敗: " + e.Message); }
+            }
+
+            Debug.Log("[CreatureAI] 性格 = 「" + label + "」(臆病" + timid + " 好奇" + curious +
+                " 活発" + active + " のんびり" + relax + ") を " + n + " 匹に適用");
+            EditorUtility.DisplayDialog("CreatureAI",
+                "性格:「" + label + "」を " + n + " 匹に適用しました。\n" +
+                "臆病" + timid + " / 好奇心" + curious + " / 活発" + active + " / のんびり" + relax + "\n\n" +
+                (Application.isPlaying ? "再生中なので即反映されます。" : "▶ Play で反映されます。"), "OK");
+        }
 
         // ================= オブジェクト生成ヘルパー =================
 

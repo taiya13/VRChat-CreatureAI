@@ -18,6 +18,7 @@ namespace CreatureAI
         private CreatureProfile profile;
         private NeedsData needsData;
         private ActionRunner actionRunner;
+        private CreaturePersonality personality;
 
         private float lastGrowTime = -1f;
 
@@ -27,6 +28,7 @@ namespace CreatureAI
             profile = creatureProfile;
             needsData = data;
             actionRunner = runner;
+            personality = GetComponent<CreaturePersonality>(); // 活発さで増加速度が変わる
             lastGrowTime = Time.time;
         }
 
@@ -47,6 +49,9 @@ namespace CreatureAI
             if (actionRunner != null && actionRunner.IsActing())
                 actingIndex = (int)actionRunner.GetActingNeed();
 
+            // 活発な猫ほど早く空腹になる(性格の倍率)。
+            float pmult = (personality != null) ? personality.GetNeedsRateMult() : 1f;
+
             // 全 Need を、それぞれの increaseRate で増やす(0 の Need は増えない)。
             // Water/Fun/Social を足しても、増加速度を設定するだけで自動的に働く。
             int count = needsData.GetNeedCount();
@@ -54,7 +59,7 @@ namespace CreatureAI
             {
                 if (i == actingIndex) continue; // 行動中の欲求はスキップ
                 NeedType nt = (NeedType)i;
-                float rate = profile.GetIncreaseRate(nt);
+                float rate = profile.GetIncreaseRate(nt) * pmult;
                 if (rate != 0f) needsData.AddClamped(nt, rate * dt);
             }
         }

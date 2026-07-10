@@ -26,6 +26,7 @@ namespace CreatureAI
 
         private NeedsData needsData;
         private CreatureProfile profile;
+        private CreaturePersonality personality;
 
         private Goal currentGoal = Goal.None;
 
@@ -38,6 +39,7 @@ namespace CreatureAI
         {
             needsData = data;
             profile = creatureProfile;
+            personality = GetComponent<CreaturePersonality>(); // のんびりさで行動開始しきい値が変わる
         }
 
         /// <summary>
@@ -90,6 +92,7 @@ namespace CreatureAI
 
             float bestValue = needsData.GetValue(best);
             float th = (profile != null) ? profile.GetThreshold(best) : FallbackThreshold;
+            if (personality != null) th *= personality.GetThresholdMult(); // のんびりほど溜まるまで待つ
             Goal newGoal = (bestValue >= th) ? GoalForNeed(best) : Goal.None;
 
             if (newGoal != currentGoal)

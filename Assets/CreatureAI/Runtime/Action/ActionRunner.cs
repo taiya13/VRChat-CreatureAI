@@ -36,6 +36,7 @@ namespace CreatureAI
         private MovementController movement;
         private NeedsController needsController;
         private CreatureProfile profile;
+        private CreaturePersonality personality;
 
         private bool acting = false;
         private Goal actingGoal = Goal.None;
@@ -52,6 +53,7 @@ namespace CreatureAI
             movement = m;
             needsController = n;
             profile = p;
+            personality = GetComponent<CreaturePersonality>(); // 活発さで回復速度が変わる
             lastTime = Time.time;
         }
 
@@ -101,9 +103,10 @@ namespace CreatureAI
 
             state = AgentState.Acting;
 
-            // 対応する欲求を、その Need の decreaseRate で回復。
+            // 対応する欲求を、その Need の decreaseRate で回復(活発さで速さが変わる)。
             NeedType nt = brain.NeedForGoal(goal);
             float rate = (profile != null) ? profile.GetDecreaseRate(nt) : fallbackRecoverRate;
+            if (personality != null) rate *= personality.GetNeedsRateMult();
             if (dt > 0f) needsController.Satisfy(nt, rate * dt);
         }
 

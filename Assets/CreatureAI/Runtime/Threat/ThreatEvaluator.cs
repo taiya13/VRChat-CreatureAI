@@ -30,6 +30,13 @@ namespace CreatureAI
         private float lastDistance = 999f;
         private Vector3 threatPosition;
 
+        private CreaturePersonality personality;
+
+        void Start()
+        {
+            personality = GetComponent<CreaturePersonality>(); // 性格(臆病さ)で反応距離が変わる
+        }
+
         /// <summary>CreatureCore の Tick(毎回)から呼ばれる。危険源を評価する。</summary>
         public void Check()
         {
@@ -41,9 +48,13 @@ namespace CreatureAI
                 return;
             }
 
+            // 臆病な猫ほど遠くから逃げる(反応距離が伸びる)。
+            float effectiveDistance = threatDistance;
+            if (personality != null) effectiveDistance *= personality.GetThreatDistanceMult();
+
             threatPosition = lp.GetPosition();
             lastDistance = Vector3.Distance(transform.position, threatPosition);
-            threatened = lastDistance < threatDistance;
+            threatened = lastDistance < effectiveDistance;
 
             if (threatened != wasThreatened)
             {

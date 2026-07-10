@@ -54,6 +54,7 @@ namespace CreatureAI
         private CreatureProfile profile;
         private CreatureBrain brain;
         private ThreatEvaluator threat;
+        private CreaturePersonality personality;
 
         private CreaturePoint lastTarget = null;
         private bool arrived = false;
@@ -76,6 +77,7 @@ namespace CreatureAI
             profile = GetComponentInChildren<CreatureProfile>();
             brain = GetComponent<CreatureBrain>();
             threat = GetComponent<ThreatEvaluator>();
+            personality = GetComponent<CreaturePersonality>(); // 活発さ/好奇心/臆病さ が移動に影響
 
             home = transform.position; // 徘徊の起点
         }
@@ -129,7 +131,7 @@ namespace CreatureAI
             }
 
             // --- 移動 ---
-            float speed = (profile != null) ? profile.moveSpeed : fallbackSpeed;
+            float speed = BaseSpeed();
             Vector3 dir = flat / dist; // 正規化した水平方向
             Vector3 step = dir * speed * Time.deltaTime;
             if (step.magnitude > dist) step = flat; // 行き過ぎ防止(スナップ)
@@ -182,15 +184,16 @@ namespace CreatureAI
 
             if (dist <= wanderStopDistance)
             {
-                // 到着 → しばらく休む。
+                // 到着 → しばらく休む(のんびり/好奇心で休憩時間が変わる)。
                 hasWanderTarget = false;
                 wanderActive = false;
-                wanderPauseUntil = now + Random.Range(wanderPauseMin, wanderPauseMax);
+                float pmult = (personality != null) ? personality.GetWanderPauseMult() : 1f;
+                wanderPauseUntil = now + Random.Range(wanderPauseMin, wanderPauseMax) * pmult;
                 return;
             }
 
             wanderActive = true;
-            float speed = ((profile != null) ? profile.moveSpeed : fallbackSpeed) * wanderSpeedMultiplier;
+            float speed = BaseSpeed() * wanderSpeedMultiplier;
             Vector3 dir = flat / dist;
             Vector3 step = dir * speed * Time.deltaTime;
             if (step.magnitude > dist) step = flat;
@@ -202,8 +205,10 @@ namespace CreatureAI
 
         private void PickWanderTarget()
         {
-            float rx = Random.Range(-wanderRadius, wanderRadius);
-            float rz = Random.Range(-wanderRadius, wanderRadius);
+            // 好奇心が高いほど広く探索する。
+            float r = wanderRadius * ((personality != null) ? personality.GetWanderRadiusMult() : 1f);
+            float rx = Random.Range(-r, r);
+            float rz = Random.Range(-r, r);
             wanderTarget = new Vector3(home.x + rx, home.y, home.z + rz);
             hasWanderTarget = true;
         }
@@ -250,11 +255,21 @@ namespace CreatureAI
                 fleeDir = (fleeDir + awayDir * 0.15f).normalized;
             }
 
-            float speed = ((profile != null) ? profile.moveSpeed : fallbackSpeed) * fleeSpeedMultiplier;
+            // 臆病な猫ほど速く逃げる。
+            float fleeMult = (personality != null) ? personality.GetFleeSpeedMult() : 1f;
+            float speed = BaseSpeed() * fleeSpeedMultiplier * fleeMult;
             transform.position = pos + fleeDir * speed * Time.deltaTime;
 
             Quaternion look = Quaternion.LookRotation(fleeDir, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, look, turnSpeed * Time.deltaTime);
+        }
+
+        /// <summary>基本移動速度(Profile の moveSpeed × 性格の活発さ倍率)。</summary>
+        private float BaseSpeed()
+        {
+            float s = (profile != null) ? profile.moveSpeed : fallbackSpeed;
+            if (personality != null) s *= personality.GetMoveSpeedMult();
+            return s;
         }
 
         /// <summary>水平ベクトルを Y 軸まわりに angle 度回す(Quaternion を使わない軽量版)。</summary>

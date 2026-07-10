@@ -124,11 +124,17 @@ namespace CreatureAI.EditorTools
                 if (cc != null) cands = SafeInt(cc);
             }
 
+            string persoLine = "";
+            CreaturePersonality cp = c.GetComponent<CreaturePersonality>();
+            if (cp != null)
+                persoLine = "\n性格: 臆" + cp.timidity + " 好" + cp.curiosity +
+                    " 活" + cp.activeness + " 呑" + cp.relaxedness;
+
             string label = c.name + "   [" + agentState + " / " + motion + "]" +
                 "\nGoal: " + goal + "   (top: " + reason + ")" +
                 "\nTarget: " + target +
                 "\nCandidates: " + cands +
-                threatLine;
+                threatLine + persoLine;
             DrawLabel(pos + Vector3.up * 0.6f, label, CatColor);
 
             if (hasTarget)
