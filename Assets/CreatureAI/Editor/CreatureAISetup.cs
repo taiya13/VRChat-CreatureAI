@@ -194,6 +194,9 @@ namespace CreatureAI.EditorTools
             if (catAnimator != null)
             {
                 catAnimator.animator = anim;
+                // 参照フィールドは Udon 側へも確実にコピーしておく(実行時に animator=null に
+                // ならないようにする。他コンポーネントと同じ扱い)。
+                UdonSharpEditorUtility.CopyProxyToUdon(catAnimator);
                 EditorUtility.SetDirty(catAnimator);
             }
 
@@ -231,6 +234,59 @@ namespace CreatureAI.EditorTools
                 "もう一度このメニューを押すと、位置をずらして2匹目・3匹目を追加できます。\n" +
                 "餌・ベッドは全猫で共有され、占有(予約)で取り合いになりません。\n\n" +
                 "▶ Play で動作を確認してください。※ Body / Mesh は差し替え可能です。", "OK");
+        }
+
+        // ================= メニュー 3: Animator Controller を再生成 =================
+
+        /// <summary>
+        /// 既存の生成 Controller(+プレースホルダ clip)を削除して作り直し、シーン内の全 Cat の
+        /// Animator に割り当て直す。古い5状態の Controller を、最新の全モーション(Idle/Walk/Eat/
+        /// Sleep/Flee/Drink/Play/Scratch/Groom/Stretch)+ 正しい MotionState 遷移へ更新する用。
+        /// EnsureAnimatorController は「既にあれば再利用」するため、更新にはこの明示再生成が要る。
+        /// </summary>
+        [MenuItem("CreatureAI/3. Animator Controller を再生成", false, 3)]
+        public static void RegenerateAnimatorController()
+        {
+            if (AssetDatabase.IsValidFolder(GenFolder))
+            {
+                AssetDatabase.DeleteAsset(ControllerPath);
+                // プレースホルダ clip も消して作り直す(CreateAsset の名前重複を避ける)。
+                foreach (string guid in AssetDatabase.FindAssets("t:AnimationClip", new[] { GenFolder }))
+                    AssetDatabase.DeleteAsset(AssetDatabase.GUIDToAssetPath(guid));
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+            }
+
+            AnimatorController ac = EnsureAnimatorController();
+            if (ac == null)
+            {
+                EditorUtility.DisplayDialog("CreatureAI",
+                    "AnimatorController の再生成に失敗しました。Console を確認してください。", "OK");
+                return;
+            }
+
+            // シーン内の全 Cat(CreatureAnimator を持つ Animator)へ割り当て直す。
+            int reassigned = 0;
+            foreach (CreatureAnimator ca in UnityEngine.Object.FindObjectsOfType<CreatureAnimator>())
+            {
+                Animator anim = ca.animator;
+                if (anim == null) anim = ca.GetComponent<Animator>();
+                if (anim == null) anim = ca.GetComponentInChildren<Animator>();
+                if (anim == null) continue;
+
+                anim.runtimeAnimatorController = ac;
+                ca.animator = anim;
+                try { UdonSharpEditorUtility.CopyProxyToUdon(ca); } catch { }
+                EditorUtility.SetDirty(anim);
+                EditorUtility.SetDirty(ca);
+                reassigned++;
+            }
+
+            EditorUtility.DisplayDialog("CreatureAI",
+                "AnimatorController を再生成しました(全モーション対応)。\n" +
+                "シーンの Cat " + reassigned + " 匹の Animator に割り当て直しました。\n\n" +
+                "▶ Play で Walk/Eat/Sleep/Flee 等へ遷移するか確認してください。\n" +
+                "(自作クリップは各状態の Motion を差し替えてください)", "OK");
         }
 
         // ================= メニュー 9: 壊れアセット掃除(単体) =================

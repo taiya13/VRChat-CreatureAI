@@ -34,6 +34,7 @@ namespace CreatureAI
         private CreatureBrain brain;
         private ActionRunner actionRunner;
         private CreatureActionCatalog catalog; // Goal→Motion / 表示名 の唯一の対応表
+        private bool debugLog = true;
 
         private MotionKind currentKind = MotionKind.Idle;
         private int lastSent = -999;
@@ -43,10 +44,27 @@ namespace CreatureAI
             brain = creatureBrain;
             actionRunner = runner;
             catalog = actionCatalog;
+            CreatureCore core = GetComponent<CreatureCore>();
+            if (core != null) debugLog = core.debugLog;
+
+            // Animator の解決は「本体(コントローラーが載る GameObject)」を最優先にする。
+            // 子から取ると、差し替えたモデルが持つ別 Animator を掴んでしまい、
+            // MotionState が本体のコントローラーへ届かなくなる(= Idle から遷移しない)。
+            if (animator == null) animator = GetComponent<Animator>();
+            if (animator == null) animator = GetComponentInChildren<Animator>();
+
+            if (animator == null)
+                Debug.LogWarning("[Animator] " + name + " に Animator が見つかりません。Cat 本体に " +
+                    "Animator を付け、CreatureAnimator.controller を割り当ててください。");
+            else if (debugLog)
+                Debug.Log("[Animator] " + name + " 接続 OK。param='" + parameterName +
+                    "' animator='" + animator.name + "'");
         }
 
         void Start()
         {
+            // Initialize(Core 経由)が呼ばれない構成でも、最低限 Animator を解決しておく。
+            if (animator == null) animator = GetComponent<Animator>();
             if (animator == null) animator = GetComponentInChildren<Animator>();
         }
 
@@ -59,8 +77,17 @@ namespace CreatureAI
             if (v != lastSent)
             {
                 lastSent = v;
-                if (animator != null) animator.SetInteger(parameterName, v);
-                // 動作種別は HUD / Scene ラベル(Motion)で確認できるためログは出さない。
+                if (animator != null)
+                {
+                    animator.SetInteger(parameterName, v);
+                    if (debugLog) Debug.Log("[Animator] " + name + " MotionState=" + v +
+                        " (" + GetMotionName() + ")");
+                }
+                else if (debugLog)
+                {
+                    Debug.LogWarning("[Animator] " + name + " Animator 未接続のため MotionState=" +
+                        v + " を反映できません。");
+                }
             }
         }
 
