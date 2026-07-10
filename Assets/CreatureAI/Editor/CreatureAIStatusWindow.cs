@@ -124,6 +124,7 @@ namespace CreatureAI.EditorTools
                 case 2: jp = "喉の渇き"; break;   // Thirst
                 case 3: jp = "遊びたさ"; break;   // Playfulness
                 case 4: jp = "甘えたさ"; break;   // Affection
+                case 5: jp = "爪とぎ欲"; break;   // Scratchiness
                 default: jp = ""; break;
             }
             string en = (index < enumNames.Length) ? enumNames[index] : ("Need" + index);

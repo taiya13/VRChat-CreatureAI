@@ -45,6 +45,7 @@ namespace CreatureAI
         [HideInInspector] public CreaturePointSensor pointSensor;
         [HideInInspector] public CreatureStatusDisplay statusDisplay;
         [HideInInspector] public CreatureProfile profile;
+        [HideInInspector] public CreatureActionCatalog actionCatalog;
 
         // このネコが同梱する Registry(選出結果の確認・タイムアウト掃除に使う)。
         private CreaturePointRegistry localRegistry;
@@ -63,16 +64,22 @@ namespace CreatureAI
             threatEvaluator = GetComponent<ThreatEvaluator>();
             creatureAnimator = GetComponent<CreatureAnimator>();
             pointSensor = GetComponent<CreaturePointSensor>();
+            actionCatalog = GetComponent<CreatureActionCatalog>();
             statusDisplay = GetComponentInChildren<CreatureStatusDisplay>();
             profile = GetComponentInChildren<CreatureProfile>();
             localRegistry = GetComponentInChildren<CreaturePointRegistry>();
 
             // ② 依存注入 & 選出状況の確認ログ。
+            //    actionCatalog(Goal⇔Need⇔Point⇔Motion⇔Name の唯一の対応表)を各層へ配る。
             if (needsController != null) needsController.Initialize(profile, needsData, actionRunner);
-            if (brain != null) brain.Initialize(needsData, profile);
-            if (targetSelector != null) targetSelector.Initialize(brain, pointSensor);
-            if (actionRunner != null) actionRunner.Initialize(brain, targetSelector, movementController, needsController, profile);
-            if (creatureAnimator != null) creatureAnimator.Initialize(brain, actionRunner);
+            if (brain != null) brain.Initialize(needsData, profile, actionCatalog);
+            if (targetSelector != null) targetSelector.Initialize(brain, pointSensor, actionCatalog);
+            if (actionRunner != null) actionRunner.Initialize(brain, targetSelector, movementController, needsController, profile, actionCatalog);
+            if (creatureAnimator != null) creatureAnimator.Initialize(brain, actionRunner, actionCatalog);
+
+            if (actionCatalog == null)
+                Debug.LogWarning("[CreatureCore] CreatureActionCatalog が見つかりません。Cat 本体に " +
+                    "CreatureActionCatalog を付けてください: " + name);
             if (statusDisplay != null) statusDisplay.Initialize(needsData, brain, targetSelector, pointSensor, actionRunner);
 
             if (profile == null)

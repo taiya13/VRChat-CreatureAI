@@ -17,8 +17,10 @@ namespace CreatureAI
     /// </summary>
     public class NeedsData : UdonSharpBehaviour
     {
-        // NeedType の要素数と一致させる(Hunger/Sleepiness/Thirst/Playfulness/Affection)。
-        private const int NeedCount = 5;
+        // NeedType の要素数と一致させる
+        // (Hunger/Sleepiness/Thirst/Playfulness/Affection/Scratchiness)。
+        // Need を1つ足すたびに、この定数も +1 する(Udon では enum 長を実行時取得できないため)。
+        private const int NeedCount = 6;
 
         private float[] values = new float[NeedCount];
 

@@ -37,6 +37,7 @@ namespace CreatureAI.EditorTools
             typeof(ActionRunner),
             typeof(ThreatEvaluator),
             typeof(CreatureAnimator),
+            typeof(CreatureActionCatalog),
             typeof(CreaturePersonality),
             typeof(CreatureStatusDisplay),
             typeof(CreaturePointStatusDisplay),
@@ -176,6 +177,7 @@ namespace CreatureAI.EditorTools
             AddUdonSharp<ActionRunner>(cat);
             AddUdonSharp<ThreatEvaluator>(cat);
             CreatureAnimator catAnimator = AddUdonSharp<CreatureAnimator>(cat);
+            AddUdonSharp<CreatureActionCatalog>(cat); // Goal⇔Need⇔Point⇔Motion⇔Name の対応表
             AddUdonSharp<CreaturePersonality>(cat);
             AddUdonSharp<CreaturePointSensor>(cat);
 
@@ -203,13 +205,22 @@ namespace CreatureAI.EditorTools
             registry.transform.SetParent(cat.transform, false);
             AddUdonSharp<CreaturePointRegistry>(registry);
 
-            // --- ワールド側ポイント: 餌 と ベッド(全猫で共有。無ければ作る) ---
+            // --- ワールド側ポイント(全猫で共有。無ければ作る) ---
+            // 餌・水・ベッド・爪とぎ。制作中のアセット(FoodBowl/WaterBowl/Bed/ScratchSpot)の
+            // 置き場所を、この仮メッシュごと差し替えれば使える。PointType を Inspector で選ぶだけで
+            // どのアセットも「利用可能な地点」になる(コード変更不要)。
             if (GameObject.Find("FoodBowl") == null)
                 CreatePoint("FoodBowl", PointType.Food, new Vector3(3f, 0f, 0f),
                     PrimitiveType.Cylinder, new Vector3(0.5f, 0.08f, 0.5f), new Color(0.7f, 0.45f, 0.2f));
+            if (GameObject.Find("WaterBowl") == null)
+                CreatePoint("WaterBowl", PointType.Water, new Vector3(3f, 0f, 1.5f),
+                    PrimitiveType.Cylinder, new Vector3(0.5f, 0.06f, 0.5f), new Color(0.3f, 0.6f, 0.9f));
             if (GameObject.Find("Bed") == null)
                 CreatePoint("Bed", PointType.Bed, new Vector3(-3f, 0f, 1.5f),
                     PrimitiveType.Cube, new Vector3(1.0f, 0.15f, 1.3f), new Color(0.35f, 0.5f, 0.85f));
+            if (GameObject.Find("ScratchSpot") == null)
+                CreatePoint("ScratchSpot", PointType.ScratchPost, new Vector3(-3f, 0f, -1.5f),
+                    PrimitiveType.Cylinder, new Vector3(0.28f, 0.6f, 0.28f), new Color(0.55f, 0.4f, 0.25f));
 
             // --- 頭上の状態表示ボード ---
             BuildStatusBoard(cat);
@@ -384,9 +395,12 @@ namespace CreatureAI.EditorTools
         private const string ControllerPath = "Assets/CreatureAI_Generated/CreatureAnimator.controller";
 
         /// <summary>
-        /// 5状態(Idle/Walk/Eat/Sleep/Flee)+ 整数パラメータ MotionState + AnyState 遷移 の
-        /// AnimatorController を用意する。既にあれば再利用(ユーザーの編集を壊さない)。
+        /// MotionState(整数パラメータ)+ AnyState 遷移 の AnimatorController を用意する。
+        /// 状態は下の「モーション対応表」1 箇所で定義する。新しいモーションを足すときは、
+        /// MotionKind に値を足して(enum)、この表に 1 行足すだけでよい(値=MotionState の整数)。
         /// 各状態には「動いて見える」プレースホルダのモーションを入れておく(差し替え前提)。
+        /// 既に Controller があれば再利用する(ユーザーの編集を壊さない。作り直したいときは
+        /// Assets/CreatureAI_Generated/CreatureAnimator.controller を削除してから実行)。
         /// </summary>
         private static AnimatorController EnsureAnimatorController()
         {
@@ -402,23 +416,33 @@ namespace CreatureAI.EditorTools
                 ac.AddParameter("MotionState", AnimatorControllerParameterType.Int);
                 AnimatorStateMachine sm = ac.layers[0].stateMachine;
 
-                AnimatorState idle = AddAnimState(sm, "Idle",
-                    MakeClip("Idle_ph", "localPosition.y", Bob(2.0f, 0.35f, 0.37f), true), new Vector3(300, 0, 0));
-                AnimatorState walk = AddAnimState(sm, "Walk",
-                    MakeClip("Walk_ph", "localPosition.y", Bob(0.4f, 0.33f, 0.46f), true), new Vector3(300, 60, 0));
-                AnimatorState eat = AddAnimState(sm, "Eat",
-                    MakeClip("Eat_ph", "localPosition.y", Const(0.20f), true), new Vector3(300, 120, 0));
-                AnimatorState sleep = AddAnimState(sm, "Sleep",
-                    MakeClip2("Sleep_ph", "localPosition.y", Const(0.18f), "localScale.y", Const(0.18f), true), new Vector3(300, 180, 0));
-                AnimatorState flee = AddAnimState(sm, "Flee",
-                    MakeClip("Flee_ph", "localPosition.x", Shake(0.18f, 0f, 0.06f), true), new Vector3(300, 240, 0));
+                // ===== モーション対応表(唯一の定義箇所) =====
+                // ここに { 状態名, MotionState 値, プレースホルダ Motion } を 1 行足すだけで、
+                // 新しいモーションが Animator に載る。値は MotionKind の値と一致させること。
+                int row = 0;
+                AnimatorState idle =
+                BuildMotionState(sm, "Idle", (int)MotionKind.Idle,
+                    MakeClip("Idle_ph", "localPosition.y", Bob(2.0f, 0.35f, 0.37f), true), row++);
+                BuildMotionState(sm, "Walk", (int)MotionKind.Walk,
+                    MakeClip("Walk_ph", "localPosition.y", Bob(0.4f, 0.33f, 0.46f), true), row++);
+                BuildMotionState(sm, "Eat", (int)MotionKind.Eat,
+                    MakeClip("Eat_ph", "localPosition.y", Const(0.20f), true), row++);
+                BuildMotionState(sm, "Sleep", (int)MotionKind.Sleep,
+                    MakeClip2("Sleep_ph", "localPosition.y", Const(0.18f), "localScale.y", Const(0.18f), true), row++);
+                BuildMotionState(sm, "Flee", (int)MotionKind.Flee,
+                    MakeClip("Flee_ph", "localPosition.x", Shake(0.18f, 0f, 0.06f), true), row++);
+                BuildMotionState(sm, "Drink", (int)MotionKind.Drink,
+                    MakeClip("Drink_ph", "localPosition.y", Const(0.16f), true), row++);
+                BuildMotionState(sm, "Play", (int)MotionKind.Play,
+                    MakeClip("Play_ph", "localPosition.y", Bob(0.5f, 0.32f, 0.55f), true), row++);
+                BuildMotionState(sm, "Scratch", (int)MotionKind.Scratch,
+                    MakeClip("Scratch_ph", "localPosition.x", Shake(0.14f, 0f, 0.04f), true), row++);
+                BuildMotionState(sm, "Groom", (int)MotionKind.Groom,
+                    MakeClip("Groom_ph", "localPosition.y", Bob(0.9f, 0.33f, 0.38f), true), row++);
+                BuildMotionState(sm, "Stretch", (int)MotionKind.Stretch,
+                    MakeClip2("Stretch_ph", "localScale.z", Const(1.35f), "localPosition.y", Const(0.30f), true), row++);
 
                 sm.defaultState = idle;
-                AddAnyTransition(sm, idle, 0);
-                AddAnyTransition(sm, walk, 1);
-                AddAnyTransition(sm, eat, 2);
-                AddAnyTransition(sm, sleep, 3);
-                AddAnyTransition(sm, flee, 4);
 
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
@@ -429,6 +453,14 @@ namespace CreatureAI.EditorTools
                 Debug.LogWarning("[CreatureAI Setup] AnimatorController の自動生成に失敗(手動で割り当ててください): " + e.Message);
                 return null;
             }
+        }
+
+        /// <summary>1つのモーション状態を作り、AnyState→この状態(MotionState==value)の遷移も張る。</summary>
+        private static AnimatorState BuildMotionState(AnimatorStateMachine sm, string name, int value, Motion clip, int row)
+        {
+            AnimatorState s = AddAnimState(sm, name, clip, new Vector3(300, row * 55, 0));
+            AddAnyTransition(sm, s, value);
+            return s;
         }
 
         private static AnimatorState AddAnimState(AnimatorStateMachine sm, string name, Motion clip, Vector3 pos)

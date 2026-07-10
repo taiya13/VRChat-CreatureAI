@@ -12,7 +12,7 @@ namespace CreatureAI
     ///   ・decreaseRate : 行動中の回復(減少)速度(1秒あたり)。
     ///   ・threshold    : 行動開始のしきい値(この値まで溜まったら行動)。
     ///   ・weight       : Brain の優先度計算に使う重み。
-    ///   配列の並びは NeedType の順(Hunger, Sleepiness, Thirst, Playfulness, Affection)。
+    ///   配列の並びは NeedType の順(Hunger, Sleepiness, Thirst, Playfulness, Affection, Scratchiness)。
     ///
     /// [Need の追加(Water/Fun/Social 等)] NeedType に列挙を足し、各配列を同じ長さに
     ///   拡張し、NeedsData の NeedCount を合わせるだけ。未設定分はアクセサが既定値を返すので
@@ -20,17 +20,18 @@ namespace CreatureAI
     /// </summary>
     public class CreatureProfile : UdonSharpBehaviour
     {
-        [Tooltip("時間経過による増加速度(1秒あたり)。Hunger,Sleepiness,Thirst,Playfulness,Affection の順。")]
-        public float[] increaseRate = new float[] { 1.0f, 0.8f, 0.0f, 0.0f, 0.0f };
+        [Tooltip("時間経過による増加速度(1秒あたり)。Hunger,Sleepiness,Thirst,Playfulness,Affection,Scratchiness の順。" +
+                 "0 の Need は増えない(＝配線済みだが休眠中)。")]
+        public float[] increaseRate = new float[] { 1.0f, 0.8f, 0.5f, 0.0f, 0.0f, 0.3f };
 
         [Tooltip("行動中の回復(減少)速度(1秒あたり)。")]
-        public float[] decreaseRate = new float[] { 20f, 20f, 20f, 20f, 20f };
+        public float[] decreaseRate = new float[] { 20f, 20f, 20f, 20f, 20f, 20f };
 
         [Tooltip("行動開始のしきい値(この値まで溜まったら行動を開始)。")]
-        public float[] threshold = new float[] { 40f, 40f, 40f, 40f, 40f };
+        public float[] threshold = new float[] { 40f, 40f, 40f, 40f, 40f, 40f };
 
         [Tooltip("Brain の優先度計算に使う重み(値×重み で最優先 Need を決める)。")]
-        public float[] weight = new float[] { 1.0f, 0.9f, 1.2f, 0.7f, 0.5f };
+        public float[] weight = new float[] { 1.0f, 0.9f, 1.2f, 0.7f, 0.5f, 0.8f };
 
         [Header("移動・占有")]
         [Tooltip("簡易ステアリング移動の速度 (m/s)。")]

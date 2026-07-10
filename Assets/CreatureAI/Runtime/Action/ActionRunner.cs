@@ -37,6 +37,7 @@ namespace CreatureAI
         private NeedsController needsController;
         private CreatureProfile profile;
         private CreaturePersonality personality;
+        private CreatureActionCatalog catalog; // Goal→Need / 表示名 の唯一の対応表
 
         private bool acting = false;
         private Goal actingGoal = Goal.None;
@@ -47,13 +48,14 @@ namespace CreatureAI
         private AgentState state = AgentState.Idle;
 
         public void Initialize(CreatureBrain b, CreatureTargetSelector s, MovementController m,
-            NeedsController n, CreatureProfile p)
+            NeedsController n, CreatureProfile p, CreatureActionCatalog actionCatalog)
         {
             brain = b;
             targetSelector = s;
             movement = m;
             needsController = n;
             profile = p;
+            catalog = actionCatalog;
             personality = GetComponent<CreaturePersonality>(); // 活発さで回復速度が変わる
             CreatureCore core = GetComponent<CreatureCore>();
             if (core != null) debugLog = core.debugLog;
@@ -101,13 +103,13 @@ namespace CreatureAI
                 acting = true;
                 actingGoal = goal;
                 tp.Occupy(); // Reserved → Occupied(デバッグ表示が赤になる)
-                if (debugLog) Debug.Log("[Action] " + name + " started " + brain.GoalName(goal) + " at '" + tp.name + "'");
+                if (debugLog) Debug.Log("[Action] " + name + " started " + catalog.GoalName(goal) + " at '" + tp.name + "'");
             }
 
             state = AgentState.Acting;
 
             // 対応する欲求を、その Need の decreaseRate で回復(活発さで速さが変わる)。
-            NeedType nt = brain.NeedForGoal(goal);
+            NeedType nt = catalog.NeedForGoal(goal);
             float rate = (profile != null) ? profile.GetDecreaseRate(nt) : fallbackRecoverRate;
             if (personality != null) rate *= personality.GetNeedsRateMult();
             if (dt > 0f) needsController.Satisfy(nt, rate * dt);
@@ -129,7 +131,7 @@ namespace CreatureAI
 
         private void EndAction()
         {
-            if (debugLog) Debug.Log("[Action] " + name + " finished " + ((brain != null) ? brain.GoalName(actingGoal) : "?"));
+            if (debugLog) Debug.Log("[Action] " + name + " finished " + ((catalog != null) ? catalog.GoalName(actingGoal) : "?"));
             acting = false;
             actingGoal = Goal.None;
         }
@@ -139,13 +141,13 @@ namespace CreatureAI
         public bool IsActing() { return acting; }
         public string GetActionStateName()
         {
-            return acting ? ((brain != null) ? brain.GoalName(actingGoal) : "?") : "-";
+            return acting ? ((catalog != null) ? catalog.GoalName(actingGoal) : "?") : "-";
         }
 
         /// <summary>今まさに行動中の対象 Need(空腹を食べている等)。NeedsController が増加を止めるのに使う。</summary>
         public NeedType GetActingNeed()
         {
-            return (brain != null) ? brain.NeedForGoal(actingGoal) : NeedType.Hunger;
+            return (catalog != null) ? catalog.NeedForGoal(actingGoal) : NeedType.Hunger;
         }
 
         /// <summary>明示的なエージェント状態(Idle/Moving/Acting)。</summary>
@@ -161,6 +163,6 @@ namespace CreatureAI
             }
         }
 
-        // 対応表(GoalName / NeedForGoal)は CreatureBrain に一本化した(重複排除)。
+        // 対応表(GoalName / NeedForGoal)は CreatureActionCatalog に一本化した(唯一の定義)。
     }
 }

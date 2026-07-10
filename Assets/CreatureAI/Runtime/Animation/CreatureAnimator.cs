@@ -11,11 +11,11 @@ namespace CreatureAI
     ///        アニメーションのクリップや遷移の中身は作らない(Animator 側の役割)。
     ///        Brain・Movement には一切アニメ処理を書かない(責務分離)。
     ///
-    /// [決定表(唯一の対応箇所)] DecideMotion():
-    ///        Flee → 逃げる / Acting+Eat → 食べる / Acting+Sleep → 眠る /
-    ///        Moving → 歩く / それ以外 → 待機。
-    ///        毛づくろい・あくび・伸び等を足すときは、ここに条件を1つ足し、
-    ///        MotionKind と AnimatorController に状態を足すだけでよい。
+    /// [決定の一元化] DecideMotion() が「状態→モーション」を1箇所で決める:
+    ///        Flee → 逃げる / Moving → 歩く / Acting → その Goal 用モーション / それ以外 → 待機。
+    ///        「どの Goal でどのモーションを出すか」の対応は CreatureActionCatalog.MotionForGoal
+    ///        に集約されており、新しい Action の専用モーションは対応表に1行足すだけで反映される
+    ///        (このクラスは無改造)。クリップ差し替えは Animator(Inspector)側で完結する。
     ///
     /// [他の動物への拡張] このクラスは種族非依存。犬・鹿は AnimatorController(animator)を
     ///        差し替えるだけで、同じ仕組みで別のモーションに切り替わる。
@@ -33,14 +33,16 @@ namespace CreatureAI
 
         private CreatureBrain brain;
         private ActionRunner actionRunner;
+        private CreatureActionCatalog catalog; // Goal→Motion / 表示名 の唯一の対応表
 
         private MotionKind currentKind = MotionKind.Idle;
         private int lastSent = -999;
 
-        public void Initialize(CreatureBrain creatureBrain, ActionRunner runner)
+        public void Initialize(CreatureBrain creatureBrain, ActionRunner runner, CreatureActionCatalog actionCatalog)
         {
             brain = creatureBrain;
             actionRunner = runner;
+            catalog = actionCatalog;
         }
 
         void Start()
@@ -62,7 +64,7 @@ namespace CreatureAI
             }
         }
 
-        /// <summary>状態 → 動作種別の対応(唯一の決定箇所 / 拡張点)。</summary>
+        /// <summary>状態 → 動作種別の決定(モーション決定の一元化箇所)。</summary>
         private MotionKind DecideMotion()
         {
             Goal goal = (brain != null) ? brain.GetCurrentGoal() : Goal.None;
@@ -72,13 +74,10 @@ namespace CreatureAI
 
             AgentState st = (actionRunner != null) ? actionRunner.GetState() : AgentState.Idle;
 
+            // 地点で行動中なら、その Goal 用のモーション(対応表 = CreatureActionCatalog)。
+            // 専用モーションが無い Goal は対応表が Idle を返すので、ここに条件を足す必要はない。
             if (st == AgentState.Acting)
-            {
-                if (goal == Goal.Eat) return MotionKind.Eat;
-                if (goal == Goal.Sleep) return MotionKind.Sleep;
-                // Drink / Play など専用モーションが無いものは今は待機扱い(将来ここに追加)。
-                return MotionKind.Idle;
-            }
+                return (catalog != null) ? catalog.MotionForGoal(goal) : MotionKind.Idle;
 
             if (st == AgentState.Moving) return MotionKind.Walk;
 
@@ -88,18 +87,6 @@ namespace CreatureAI
         // ================= 参照(デバッグ表示用) =================
 
         public MotionKind GetMotionKind() { return currentKind; }
-        public string GetMotionName() { return MotionName(currentKind); }
-
-        private string MotionName(MotionKind k)
-        {
-            switch (k)
-            {
-                case MotionKind.Walk: return "Walk";
-                case MotionKind.Eat: return "Eat";
-                case MotionKind.Sleep: return "Sleep";
-                case MotionKind.Flee: return "Flee";
-                default: return "Idle";
-            }
-        }
+        public string GetMotionName() { return (catalog != null) ? catalog.MotionName(currentKind) : "Idle"; }
     }
 }

@@ -8,10 +8,10 @@ VRChat SDK3 Worlds + UdonSharp 向けの、猫(生き物)AI フレームワー�
 ## できること(v1.0)
 
 - 欲求(空腹・眠気ほか)が時間で増え、閾値を超えると行動を開始する
-- 対応する地点(餌・ベッド等)を探して予約・移動・行動し、欲求を回復する
+- 対応する地点(餌・水・ベッド・爪とぎ等)を探して予約・移動・行動し、欲求を回復する
 - Idle 中は起点の周りをうろうろ徘徊する
 - プレイヤーが近づくと行動を中断してジグザグに逃げ、離れると生活に戻る
-- 状態に応じてアニメーションを切り替える(Idle/Walk/Eat/Sleep/Flee)
+- 状態に応じてアニメーションを切り替える(Idle/Walk/Eat/Sleep/Flee/Drink/Scratch ほか)
 - 性格(臆病さ/好奇心/活発さ/のんびりさ)で行動傾向が変わる
 - 複数匹を置いても、地点の占有(予約)で取り合いにならない
 
@@ -21,17 +21,20 @@ VRChat SDK3 Worlds + UdonSharp 向けの、猫(生き物)AI フレームワー�
 CreatureCore ── 参照キャッシュ + 単一 Tick ループ + 割込み指揮
   Needs層     : NeedsData(値) / NeedsController(増減) / CreatureProfile(パラメータ)
   意思決定層  : CreatureBrain(Goal 決定・ヒステリシス)
+  対応表      : CreatureActionCatalog(Goal⇔Need⇔PointType⇔Motion⇔表示名 の唯一の定義)
   ターゲット  : CreatureTargetSelector(Goal→地点を予約) / CreaturePointSensor / CreaturePointRegistry
   行動層      : ActionRunner(占有・回復・状態 AgentState・単一中断 AbortCurrent)
   身体制御    : MovementController(移動/徘徊/逃走) / CreatureAnimator(状態→Animator)
   反射・警戒  : ThreatEvaluator(危険検知)
   性格        : CreaturePersonality(各層へ倍率を提供)
-  ワールド    : CreaturePoint(餌・ベッド等)
+  ワールド    : CreaturePoint(餌・水・ベッド・爪とぎ等)
   表示(任意) : CreatureStatusDisplay / CreaturePointStatusDisplay / Billboard
 ```
 
 各層は「判断は Brain、実行は各層、性格は倍率提供」と責務が分かれ、
-GoalName/NeedForGoal などの対応表は CreatureBrain に一本化されている。
+Goal⇔Need⇔PointType⇔Motion⇔表示名 の対応表は **CreatureActionCatalog** に一本化されている。
+新しい Action・モーション・地点・欲求は、この 1 箇所を中心に足すだけで各層が無改造で追従する
+(手順は [`docs/v1.1_AssetReady.md`](docs/v1.1_AssetReady.md))。
 
 ## 導入とセットアップ
 
@@ -65,7 +68,8 @@ docs/                            … 各フェーズと v1.0 の解説
 
 ## ドキュメント
 `docs/Phase1〜8` に各機能の詳細、`docs/v1.0_Review.md` に v1.0 の
-アーキテクチャ評価・拡張性・不足点をまとめてある。
+アーキテクチャ評価・拡張性・不足点、`docs/v1.1_AssetReady.md` に対応表の集約と
+「アセット/アニメ/地点/Action の追加手順」をまとめてある。
 
 ## 差し替え(自分のモデル/アニメ)
 - 見た目: Cat 直下の `Body`(仮のカプセル)を消して自分のモデルを置く。

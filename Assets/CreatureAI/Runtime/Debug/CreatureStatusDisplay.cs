@@ -57,6 +57,8 @@ namespace CreatureAI
 
             float hunger = (needsData != null) ? needsData.GetValue(NeedType.Hunger) : 0f;
             float sleep = (needsData != null) ? needsData.GetValue(NeedType.Sleepiness) : 0f;
+            float thirst = (needsData != null) ? needsData.GetValue(NeedType.Thirst) : 0f;
+            float scratch = (needsData != null) ? needsData.GetValue(NeedType.Scratchiness) : 0f;
 
             string s =
                 "<b>" + displayName + "</b>   [" + agentState + "]\n" +
@@ -64,8 +66,10 @@ namespace CreatureAI
                 "Target : " + target + "\n" +
                 "Action : " + action + "   Cands: " + cands + "\n" +
                 "\n" +
-                "Hunger     " + Bar(hunger) + " " + Pct(hunger) + "\n" +
-                "Sleepiness " + Bar(sleep) + " " + Pct(sleep);
+                "Hunger       " + Bar(hunger) + " " + Pct(hunger) + "\n" +
+                "Sleepiness   " + Bar(sleep) + " " + Pct(sleep) + "\n" +
+                "Thirst       " + Bar(thirst) + " " + Pct(thirst) + "\n" +
+                "Scratchiness " + Bar(scratch) + " " + Pct(scratch);
 
             targetText.text = s;
         }

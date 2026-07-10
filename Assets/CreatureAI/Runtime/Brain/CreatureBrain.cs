@@ -13,7 +13,7 @@ namespace CreatureAI
     ///   例: Hunger=60(重み1.0)→60, Sleepiness=70(重み0.9)→63 ⇒ Sleep。
     ///   重み既定値では概ね「値が大きい Need」が勝つ。これは最小の Utility 計算であり、
     ///   後で「距離・時間帯・性格」などの項をスコアに足していけば、そのまま Utility AI に発展できる。
-    ///   (スコア計算 ScoreOf() と Need→Goal 対応 GoalForNeed() が拡張ポイント)
+    ///   (スコア計算 ScoreOf() が拡張ポイント。Need⇔Goal 等の対応表は CreatureActionCatalog に集約)
     ///
     /// Cat のルート(NeedsController / NeedsData と同じ GameObject)に付ける。
     /// </summary>
@@ -27,6 +27,7 @@ namespace CreatureAI
         private NeedsData needsData;
         private CreatureProfile profile;
         private CreaturePersonality personality;
+        private CreatureActionCatalog catalog; // Goal⇔Need⇔Motion⇔Name の唯一の対応表
         private bool debugLog = true;
 
         private Goal currentGoal = Goal.None;
@@ -36,10 +37,11 @@ namespace CreatureAI
         private float lastBestScore = 0f;
 
         /// <summary>CreatureCore.Start から依存を注入する。</summary>
-        public void Initialize(NeedsData data, CreatureProfile creatureProfile)
+        public void Initialize(NeedsData data, CreatureProfile creatureProfile, CreatureActionCatalog actionCatalog)
         {
             needsData = data;
             profile = creatureProfile;
+            catalog = actionCatalog;
             personality = GetComponent<CreaturePersonality>(); // のんびりさで行動開始しきい値が変わる
             CreatureCore core = GetComponent<CreatureCore>();
             if (core != null) debugLog = core.debugLog;
@@ -64,7 +66,7 @@ namespace CreatureAI
             // --- 行動中: 完了するまで現在の Goal を維持(ヒステリシス) ---
             if (currentGoal != Goal.None)
             {
-                NeedType active = NeedForGoal(currentGoal);
+                NeedType active = catalog.NeedForGoal(currentGoal);
                 float activeValue = needsData.GetValue(active);
                 lastBestNeed = active;
                 lastBestScore = ScoreOf(active, activeValue);
@@ -77,7 +79,7 @@ namespace CreatureAI
                 // 満たされた → 完了。Goal を手放して下で再選択する。
                 Goal finished = currentGoal;
                 currentGoal = Goal.None;
-                if (debugLog) Debug.Log("[Brain] " + name + " goal complete: " + GoalName(finished) + " (satisfied)");
+                if (debugLog) Debug.Log("[Brain] " + name + " goal complete: " + catalog.GoalName(finished) + " (satisfied)");
             }
 
             // --- 待機中: 最優先 Need を選び、しきい値を超えていれば開始 ---
@@ -96,13 +98,13 @@ namespace CreatureAI
             float bestValue = needsData.GetValue(best);
             float th = (profile != null) ? profile.GetThreshold(best) : FallbackThreshold;
             if (personality != null) th *= personality.GetThresholdMult(); // のんびりほど溜まるまで待つ
-            Goal newGoal = (bestValue >= th) ? GoalForNeed(best) : Goal.None;
+            Goal newGoal = (bestValue >= th) ? catalog.GoalForNeed(best) : Goal.None;
 
             if (newGoal != currentGoal)
             {
                 currentGoal = newGoal;
-                if (debugLog) Debug.Log("[Brain] " + name + " current goal: " + GoalName(newGoal) +
-                    "  (top=" + NeedName(best) + " " + Round1(bestValue) +
+                if (debugLog) Debug.Log("[Brain] " + name + " current goal: " + catalog.GoalName(newGoal) +
+                    "  (top=" + catalog.NeedName(best) + " " + Round1(bestValue) +
                     ", th=" + Round1(th) + ")");
             }
         }
@@ -132,26 +134,13 @@ namespace CreatureAI
         }
 
         /// <summary>現在の Goal を表示用の文字列で返す(状態表示 UI 等が使う)。</summary>
-        public string GetCurrentGoalName() { return GoalName(currentGoal); }
+        public string GetCurrentGoalName() { return (catalog != null) ? catalog.GoalName(currentGoal) : "-"; }
 
         /// <summary>直近で最優先だった Need の名前(判断根拠の表示用)。</summary>
-        public string GetTopNeedName() { return NeedName(lastBestNeed); }
+        public string GetTopNeedName() { return (catalog != null) ? catalog.NeedName(lastBestNeed) : "-"; }
 
         /// <summary>直近で最優先だった Need のスコア(値×重み)。</summary>
         public float GetTopScore() { return lastBestScore; }
-
-        private string NeedName(NeedType t)
-        {
-            switch (t)
-            {
-                case NeedType.Hunger: return "Hunger";
-                case NeedType.Sleepiness: return "Sleepiness";
-                case NeedType.Thirst: return "Thirst";
-                case NeedType.Playfulness: return "Playfulness";
-                case NeedType.Affection: return "Affection";
-                default: return "?";
-            }
-        }
 
         // ================= 拡張ポイント =================
 
@@ -164,62 +153,14 @@ namespace CreatureAI
             return value * GetWeight(type);
         }
 
-        private Goal GoalForNeed(NeedType type)
-        {
-            switch (type)
-            {
-                case NeedType.Hunger: return Goal.Eat;
-                case NeedType.Sleepiness: return Goal.Sleep;
-                case NeedType.Thirst: return Goal.Drink;
-                case NeedType.Playfulness: return Goal.Play;
-                case NeedType.Affection: return Goal.SeekAffection;
-                default: return Goal.None;
-            }
-        }
-
-        /// <summary>
-        /// Goal に対応する Need(GoalForNeed の逆)。ヒステリシス判定に使う。
-        /// 対応表の重複を避けるため public にし、ActionRunner もこれを使う(唯一の定義)。
-        /// </summary>
-        public NeedType NeedForGoal(Goal goal)
-        {
-            switch (goal)
-            {
-                case Goal.Eat: return NeedType.Hunger;
-                case Goal.Sleep: return NeedType.Sleepiness;
-                case Goal.Drink: return NeedType.Thirst;
-                case Goal.Play: return NeedType.Playfulness;
-                case Goal.SeekAffection: return NeedType.Affection;
-                default: return NeedType.Hunger;
-            }
-        }
-
         private float GetWeight(NeedType type)
         {
             if (profile == null) return 1f;
             return profile.GetWeight(type);
         }
 
-        // ================= ログ用ヘルパー =================
-
-        /// <summary>
-        /// Goal の表示名。enum.ToString() は Udon で名前を返さないため自前で名前化する。
-        /// 対応表の重複を避けるため public にし、ActionRunner / TargetSelector もこれを使う(唯一の定義)。
-        /// </summary>
-        public string GoalName(Goal g)
-        {
-            switch (g)
-            {
-                case Goal.Eat: return "Eat";
-                case Goal.Drink: return "Drink";
-                case Goal.Sleep: return "Sleep";
-                case Goal.Play: return "Play";
-                case Goal.SeekAffection: return "SeekAffection";
-                case Goal.Flee: return "Flee";
-                default: return "None";
-            }
-        }
-
         private float Round1(float v) { return Mathf.Round(v * 10f) / 10f; }
+
+        // Goal⇔Need⇔Motion⇔Name の対応表は CreatureActionCatalog に一本化した(唯一の定義)。
     }
 }

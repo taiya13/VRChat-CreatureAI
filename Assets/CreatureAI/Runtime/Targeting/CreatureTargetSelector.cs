@@ -22,6 +22,7 @@ namespace CreatureAI
     {
         private CreatureBrain brain;
         private CreaturePointSensor sensor;
+        private CreatureActionCatalog catalog; // Goal→PointType / 表示名 の唯一の対応表
 
         private CreaturePoint targetPoint;
         private Goal reservedForGoal = Goal.None;
@@ -31,10 +32,11 @@ namespace CreatureAI
         private CreaturePoint lastLogTarget = null;
         private bool debugLog = true;
 
-        public void Initialize(CreatureBrain creatureBrain, CreaturePointSensor pointSensor)
+        public void Initialize(CreatureBrain creatureBrain, CreaturePointSensor pointSensor, CreatureActionCatalog actionCatalog)
         {
             brain = creatureBrain;
             sensor = pointSensor;
+            catalog = actionCatalog;
             CreatureCore core = GetComponent<CreatureCore>();
             if (core != null) debugLog = core.debugLog;
         }
@@ -58,7 +60,7 @@ namespace CreatureAI
             // Goal が変わった / ターゲット未保持 / 無効化 → 取り直し。
             ReleaseTarget();
 
-            PointType need = (goal == Goal.None) ? PointType.None : PointTypeForGoal(goal);
+            PointType need = (goal == Goal.None || catalog == null) ? PointType.None : catalog.PointTypeForGoal(goal);
             if (need != PointType.None)
             {
                 CreaturePoint best = sensor.FindBest(need); // Free の候補のみ返る
@@ -89,20 +91,7 @@ namespace CreatureAI
         public bool HasTarget() { return targetPoint != null; }
         public string GetTargetPointName() { return targetPoint != null ? targetPoint.name : "-"; }
 
-        // ================= 拡張ポイント / ヘルパー =================
-
-        /// <summary>Goal に必要な PointType を返す。SeekAffection は対応点が無い(後で Player 対応)。</summary>
-        private PointType PointTypeForGoal(Goal goal)
-        {
-            switch (goal)
-            {
-                case Goal.Eat: return PointType.Food;
-                case Goal.Drink: return PointType.Water;
-                case Goal.Sleep: return PointType.Bed;
-                case Goal.Play: return PointType.Toy;
-                default: return PointType.None; // None / SeekAffection
-            }
-        }
+        // ================= ヘルパー =================
 
         private void ReportChange(Goal goal, CreaturePoint tp)
         {
@@ -110,7 +99,7 @@ namespace CreatureAI
             lastLogGoal = goal;
             lastLogTarget = tp;
 
-            string goalName = (brain != null) ? brain.GoalName(goal) : "?";
+            string goalName = (catalog != null) ? catalog.GoalName(goal) : "?";
             if (tp != null)
                 if (debugLog) Debug.Log("[Target] " + name + " reserved '" + tp.name + "' for goal " + goalName);
             // Flee は地点を使わないので「ポイント無し」は正常。ログしない。
@@ -118,7 +107,6 @@ namespace CreatureAI
                 if (debugLog) Debug.Log("[Target] " + name + " goal=" + goalName + " だが利用可能なポイントが無い");
         }
 
-        // GoalName は CreatureBrain に一本化した(重複排除)。PointTypeForGoal は
-        // 「Goal→地点種別」の対応で TargetSelector 固有のため、ここに置いたまま。
+        // Goal→PointType / GoalName の対応は CreatureActionCatalog に一本化した(唯一の定義)。
     }
 }
