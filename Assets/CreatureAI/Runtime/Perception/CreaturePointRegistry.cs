@@ -27,21 +27,26 @@ namespace CreatureAI
         private CreaturePoint[] points = new CreaturePoint[16];
         private int pointCount = 0;
         private bool isActiveSingleton = false;
+        private bool debugLog = true;
 
         void Start()
         {
+            // Registry は Cat の子なので、親の CreatureCore からログ設定を読む。
+            CreatureCore core = GetComponentInParent<CreatureCore>();
+            if (core != null) debugLog = core.debugLog;
+
             // --- 自己選出(仕様 6章) ---
             GameObject found = GameObject.Find(RegistryObjectName);
             if (found == this.gameObject)
             {
                 isActiveSingleton = true;
-                Debug.Log("[CreaturePointRegistry] Singleton に選出されました: " + GetPath());
+                if (debugLog) Debug.Log("[CreaturePointRegistry] Singleton に選出されました: " + GetPath());
             }
             else
             {
                 isActiveSingleton = false;
                 // 以後は完全に待機。登録も検索も稼働 singleton 側に集約されるため何もしない。
-                Debug.Log("[CreaturePointRegistry] 待機(別インスタンスが稼働中): " + GetPath());
+                if (debugLog) Debug.Log("[CreaturePointRegistry] 待機(別インスタンスが稼働中): " + GetPath());
             }
         }
 
@@ -62,7 +67,7 @@ namespace CreatureAI
             points[pointCount] = point;
             pointCount++;
 
-            Debug.Log("[CreaturePointRegistry] 登録: " + point.name + " (合計 " + pointCount + " 個)");
+            if (debugLog) Debug.Log("[CreaturePointRegistry] 登録: " + point.name + " (合計 " + pointCount + " 個)");
         }
 
         public void Unregister(CreaturePoint point)
@@ -150,7 +155,7 @@ namespace CreatureAI
                 if (p.IsReservationExpired(timeout))
                 {
                     p.Release();
-                    Debug.Log("[CreaturePointRegistry] 予約タイムアウトのため解放: " + p.name);
+                    if (debugLog) Debug.Log("[CreaturePointRegistry] 予約タイムアウトのため解放: " + p.name);
                 }
             }
         }

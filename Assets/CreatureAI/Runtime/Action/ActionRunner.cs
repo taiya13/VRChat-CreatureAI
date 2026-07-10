@@ -41,6 +41,7 @@ namespace CreatureAI
         private bool acting = false;
         private Goal actingGoal = Goal.None;
         private float lastTime = -1f;
+        private bool debugLog = true;
 
         // 明示的なエージェント状態(観測用。判断はしない)。
         private AgentState state = AgentState.Idle;
@@ -54,6 +55,8 @@ namespace CreatureAI
             needsController = n;
             profile = p;
             personality = GetComponent<CreaturePersonality>(); // 活発さで回復速度が変わる
+            CreatureCore core = GetComponent<CreatureCore>();
+            if (core != null) debugLog = core.debugLog;
             lastTime = Time.time;
         }
 
@@ -98,7 +101,7 @@ namespace CreatureAI
                 acting = true;
                 actingGoal = goal;
                 tp.Occupy(); // Reserved → Occupied(デバッグ表示が赤になる)
-                Debug.Log("[Action] " + name + " started " + brain.GoalName(goal) + " at '" + tp.name + "'");
+                if (debugLog) Debug.Log("[Action] " + name + " started " + brain.GoalName(goal) + " at '" + tp.name + "'");
             }
 
             state = AgentState.Acting;
@@ -126,7 +129,7 @@ namespace CreatureAI
 
         private void EndAction()
         {
-            Debug.Log("[Action] " + name + " finished " + ((brain != null) ? brain.GoalName(actingGoal) : "?"));
+            if (debugLog) Debug.Log("[Action] " + name + " finished " + ((brain != null) ? brain.GoalName(actingGoal) : "?"));
             acting = false;
             actingGoal = Goal.None;
         }

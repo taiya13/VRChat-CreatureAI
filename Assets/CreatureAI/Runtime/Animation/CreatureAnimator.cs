@@ -58,7 +58,7 @@ namespace CreatureAI
             {
                 lastSent = v;
                 if (animator != null) animator.SetInteger(parameterName, v);
-                Debug.Log("[Animator] " + name + " motion → " + MotionName(currentKind));
+                // 動作種別は HUD / Scene ラベル(Motion)で確認できるためログは出さない。
             }
         }
 

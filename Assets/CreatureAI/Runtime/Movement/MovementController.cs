@@ -55,6 +55,7 @@ namespace CreatureAI
         private CreatureBrain brain;
         private ThreatEvaluator threat;
         private CreaturePersonality personality;
+        private bool debugLog = true;
 
         private CreaturePoint lastTarget = null;
         private bool arrived = false;
@@ -78,6 +79,8 @@ namespace CreatureAI
             brain = GetComponent<CreatureBrain>();
             threat = GetComponent<ThreatEvaluator>();
             personality = GetComponent<CreaturePersonality>(); // 活発さ/好奇心/臆病さ が移動に影響
+            CreatureCore core = GetComponent<CreatureCore>();
+            if (core != null) debugLog = core.debugLog;
 
             home = transform.position; // 徘徊の起点
         }
@@ -123,7 +126,7 @@ namespace CreatureAI
                 if (!arrived)
                 {
                     arrived = true;
-                    Debug.Log("[Move] " + name + " arrived at '" + tp.name + "' (dist=" +
+                    if (debugLog) Debug.Log("[Move] " + name + " arrived at '" + tp.name + "' (dist=" +
                         (Mathf.Round(dist * 100f) / 100f) + "m)");
                     // 到着イベント。今は通知のみ。ActionRunner はここ / IsAtTarget() を起点に繋ぐ。
                 }

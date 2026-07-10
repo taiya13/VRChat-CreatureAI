@@ -29,11 +29,14 @@ namespace CreatureAI
         // ログ抑制(状態が変わった時だけ出す)。
         private Goal lastLogGoal = (Goal)(-1);
         private CreaturePoint lastLogTarget = null;
+        private bool debugLog = true;
 
         public void Initialize(CreatureBrain creatureBrain, CreaturePointSensor pointSensor)
         {
             brain = creatureBrain;
             sensor = pointSensor;
+            CreatureCore core = GetComponent<CreatureCore>();
+            if (core != null) debugLog = core.debugLog;
         }
 
         /// <summary>
@@ -109,10 +112,10 @@ namespace CreatureAI
 
             string goalName = (brain != null) ? brain.GoalName(goal) : "?";
             if (tp != null)
-                Debug.Log("[Target] " + name + " reserved '" + tp.name + "' for goal " + goalName);
+                if (debugLog) Debug.Log("[Target] " + name + " reserved '" + tp.name + "' for goal " + goalName);
             // Flee は地点を使わないので「ポイント無し」は正常。ログしない。
             else if (goal != Goal.None && goal != Goal.Flee)
-                Debug.Log("[Target] " + name + " goal=" + goalName + " だが利用可能なポイントが無い");
+                if (debugLog) Debug.Log("[Target] " + name + " goal=" + goalName + " だが利用可能なポイントが無い");
         }
 
         // GoalName は CreatureBrain に一本化した(重複排除)。PointTypeForGoal は

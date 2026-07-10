@@ -33,10 +33,14 @@ namespace CreatureAI
         private float lastRefreshTime = -999f;
         private int lastLoggedCount = -1;
 
+        private bool debugLog = true;
+
         void Start()
         {
             if (maxCandidates < 1) maxCandidates = 1;
             candidates = new CreaturePoint[maxCandidates];
+            CreatureCore core = GetComponent<CreatureCore>();
+            if (core != null) debugLog = core.debugLog;
         }
 
         /// <summary>
@@ -61,7 +65,7 @@ namespace CreatureAI
             // 候補数が変化したときだけログ(コンソールを埋めないため)。
             if (candidateCount != lastLoggedCount)
             {
-                Debug.Log("[CreaturePointSensor] 近傍候補: " + candidateCount + " 個 (" + name + ")");
+                if (debugLog) Debug.Log("[CreaturePointSensor] 近傍候補: " + candidateCount + " 個 (" + name + ")");
                 lastLoggedCount = candidateCount;
             }
         }

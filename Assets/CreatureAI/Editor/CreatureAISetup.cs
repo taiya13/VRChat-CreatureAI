@@ -152,21 +152,20 @@ namespace CreatureAI.EditorTools
                 return;
             }
 
-            if (GameObject.Find("Cat") != null || GameObject.Find("__CatAI_Registry") != null)
-            {
-                EditorUtility.DisplayDialog("CreatureAI Setup",
-                    "シーンに既に Cat または __CatAI_Registry があります。\n" +
-                    "以前のものを削除してから再実行してください。", "OK");
-                return;
-            }
-
-            // --- Cat 本体 ---
-            GameObject cat = new GameObject("Cat");
-            Undo.RegisterCreatedObjectUndo(cat, "Create CreatureAI Cat");
             // 直前に UdonSharp の型ルックアップキャッシュを作り直す。
             // 新規スクリプトを足したフェーズで「Value cannot be null. key」が出るのは、
             // 新アセットが未登録の古いキャッシュを使ってしまうため。ここでリセットすれば根絶できる。
             ResetUdonSharpCaches();
+
+            // 複数匹対応: 既存の猫の数だけ名前と位置をずらして作る(重ならないように)。
+            int existingCats = UnityEngine.Object.FindObjectsOfType<CreatureCore>().Length;
+            string catName = (existingCats == 0) ? "Cat" : ("Cat " + (existingCats + 1));
+            Vector3 catPos = new Vector3(existingCats * 2.5f, 0f, 0f);
+
+            // --- Cat 本体 ---
+            GameObject cat = new GameObject(catName);
+            cat.transform.position = catPos;
+            Undo.RegisterCreatedObjectUndo(cat, "Create CreatureAI Cat");
 
             AddUdonSharp<CreatureCore>(cat);
             AddUdonSharp<NeedsController>(cat);
@@ -204,22 +203,23 @@ namespace CreatureAI.EditorTools
             registry.transform.SetParent(cat.transform, false);
             AddUdonSharp<CreaturePointRegistry>(registry);
 
-            // --- ワールド側ポイント: 餌 と ベッド(見えるオブジェクト付き・差し替え可能) ---
-            CreatePoint("FoodBowl", PointType.Food, new Vector3(3f, 0f, 0f),
-                PrimitiveType.Cylinder, new Vector3(0.5f, 0.08f, 0.5f), new Color(0.7f, 0.45f, 0.2f));
-            CreatePoint("Bed", PointType.Bed, new Vector3(-3f, 0f, 1.5f),
-                PrimitiveType.Cube, new Vector3(1.0f, 0.15f, 1.3f), new Color(0.35f, 0.5f, 0.85f));
+            // --- ワールド側ポイント: 餌 と ベッド(全猫で共有。無ければ作る) ---
+            if (GameObject.Find("FoodBowl") == null)
+                CreatePoint("FoodBowl", PointType.Food, new Vector3(3f, 0f, 0f),
+                    PrimitiveType.Cylinder, new Vector3(0.5f, 0.08f, 0.5f), new Color(0.7f, 0.45f, 0.2f));
+            if (GameObject.Find("Bed") == null)
+                CreatePoint("Bed", PointType.Bed, new Vector3(-3f, 0f, 1.5f),
+                    PrimitiveType.Cube, new Vector3(1.0f, 0.15f, 1.3f), new Color(0.35f, 0.5f, 0.85f));
 
             // --- 頭上の状態表示ボード ---
             BuildStatusBoard(cat);
 
             Selection.activeGameObject = cat;
             EditorUtility.DisplayDialog("CreatureAI Setup",
-                "Cat(体つき)・FoodBowl・Bed(見えるオブジェクト付き)・状態表示を作成しました。\n\n" +
-                "▶ Play すると猫が Target まで歩いて到着で停止し、\n" +
-                "各ポイント上に Free/Reserved/Occupied が表示されます。\n" +
-                "Console に [Target]/[Move arrived] ログが出れば Phase 4 成功です。\n\n" +
-                "※ Body / Mesh は差し替え可能(消して好きなモデルを置けます)。", "OK");
+                "「" + catName + "」を作成しました(既存の猫: " + existingCats + " 匹)。\n\n" +
+                "もう一度このメニューを押すと、位置をずらして2匹目・3匹目を追加できます。\n" +
+                "餌・ベッドは全猫で共有され、占有(予約)で取り合いになりません。\n\n" +
+                "▶ Play で動作を確認してください。※ Body / Mesh は差し替え可能です。", "OK");
         }
 
         // ================= メニュー 9: 壊れアセット掃除(単体) =================

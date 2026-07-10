@@ -27,6 +27,7 @@ namespace CreatureAI
         private NeedsData needsData;
         private CreatureProfile profile;
         private CreaturePersonality personality;
+        private bool debugLog = true;
 
         private Goal currentGoal = Goal.None;
 
@@ -40,6 +41,8 @@ namespace CreatureAI
             needsData = data;
             profile = creatureProfile;
             personality = GetComponent<CreaturePersonality>(); // のんびりさで行動開始しきい値が変わる
+            CreatureCore core = GetComponent<CreatureCore>();
+            if (core != null) debugLog = core.debugLog;
         }
 
         /// <summary>
@@ -74,7 +77,7 @@ namespace CreatureAI
                 // 満たされた → 完了。Goal を手放して下で再選択する。
                 Goal finished = currentGoal;
                 currentGoal = Goal.None;
-                Debug.Log("[Brain] " + name + " goal complete: " + GoalName(finished) + " (satisfied)");
+                if (debugLog) Debug.Log("[Brain] " + name + " goal complete: " + GoalName(finished) + " (satisfied)");
             }
 
             // --- 待機中: 最優先 Need を選び、しきい値を超えていれば開始 ---
@@ -98,7 +101,7 @@ namespace CreatureAI
             if (newGoal != currentGoal)
             {
                 currentGoal = newGoal;
-                Debug.Log("[Brain] " + name + " current goal: " + GoalName(newGoal) +
+                if (debugLog) Debug.Log("[Brain] " + name + " current goal: " + GoalName(newGoal) +
                     "  (top=" + NeedName(best) + " " + Round1(bestValue) +
                     ", th=" + Round1(th) + ")");
             }
@@ -114,7 +117,7 @@ namespace CreatureAI
             if (currentGoal != Goal.Flee)
             {
                 currentGoal = Goal.Flee;
-                Debug.Log("[Brain] " + name + " INTERRUPT → Flee");
+                if (debugLog) Debug.Log("[Brain] " + name + " INTERRUPT → Flee");
             }
         }
 
@@ -124,7 +127,7 @@ namespace CreatureAI
             if (currentGoal == Goal.Flee)
             {
                 currentGoal = Goal.None;
-                Debug.Log("[Brain] " + name + " flee end → re-evaluate");
+                if (debugLog) Debug.Log("[Brain] " + name + " flee end → re-evaluate");
             }
         }
 

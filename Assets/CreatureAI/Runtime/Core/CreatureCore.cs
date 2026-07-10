@@ -28,6 +28,11 @@ namespace CreatureAI
         [Tooltip("起動時にこの秒数までのランダム遅延を入れ、多数の猫の Tick 位相をばらす。")]
         public float startupJitter = 0.2f;
 
+        [Header("デバッグ")]
+        [Tooltip("各コンポーネントの動作ログ([Brain]/[Target]/[Move] 等)を出すか。" +
+                 "公開ワールドでは OFF 推奨。各コンポーネントは起動時にこの値を読む。")]
+        public bool debugLog = true;
+
         // --- 兄弟コンポーネント参照(仕様 3.1「公開参照」) ---
         [HideInInspector] public NeedsController needsController;
         [HideInInspector] public NeedsData needsData;
@@ -74,7 +79,7 @@ namespace CreatureAI
                 Debug.LogWarning("[CreatureCore] Profile が見つかりません。子オブジェクト 'Profile' に " +
                     "CreatureProfile を付けてください: " + name);
 
-            if (localRegistry != null)
+            if (debugLog && localRegistry != null)
                 Debug.Log("[CreatureCore] " + name + " 起動。この個体の Registry singleton = " +
                     localRegistry.IsActiveSingleton());
 

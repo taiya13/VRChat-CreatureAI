@@ -31,10 +31,13 @@ namespace CreatureAI
         private Vector3 threatPosition;
 
         private CreaturePersonality personality;
+        private bool debugLog = true;
 
         void Start()
         {
             personality = GetComponent<CreaturePersonality>(); // 性格(臆病さ)で反応距離が変わる
+            CreatureCore core = GetComponent<CreatureCore>();
+            if (core != null) debugLog = core.debugLog;
         }
 
         /// <summary>CreatureCore の Tick(毎回)から呼ばれる。危険源を評価する。</summary>
@@ -58,7 +61,7 @@ namespace CreatureAI
 
             if (threatened != wasThreatened)
             {
-                Debug.Log("[Threat] " + name + (threatened
+                if (debugLog) Debug.Log("[Threat] " + name + (threatened
                     ? (" 危険検知: プレイヤー接近 (d=" + Round1(lastDistance) + "m)")
                     : " 安全: プレイヤーが離れた"));
                 wasThreatened = threatened;
