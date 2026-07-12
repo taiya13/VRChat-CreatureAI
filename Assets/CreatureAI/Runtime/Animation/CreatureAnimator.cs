@@ -142,8 +142,24 @@ namespace CreatureAI
             if (v != lastSent)
             {
                 lastSent = v;
-                if (debugLog) Debug.Log("[Animator] " + name + " MotionState=" + v +
-                    " (" + GetMotionName() + ")");
+                if (debugLog)
+                {
+                    Debug.Log("[Animator] " + name + " MotionState=" + v + " (" + GetMotionName() + ")");
+                    // 読み戻し検証: 書き込んだ値が実際に Animator 側で保持されているか確認する。
+                    // ここが一致していれば「値は正しく届いている」ので、原因は
+                    // AnimatorController 内部の遷移設定(Has Exit Time / Condition 不一致等)。
+                    // 不一致なら、他のスクリプトが同じパラメータへ上書きしている等の疑いがある。
+                    for (int i = 0; i < targets.Length; i++)
+                    {
+                        Animator a = targets[i];
+                        if (a == null) continue;
+                        int readback = a.GetInteger(parameterName);
+                        if (readback != v)
+                            Debug.LogWarning("[Animator] " + name + " 読み戻し不一致: '" + a.name +
+                                "' に " + v + " を書いたが、読み戻しは " + readback +
+                                "(他のスクリプトが同じパラメータを上書きしている可能性)");
+                    }
+                }
             }
         }
 
