@@ -150,9 +150,9 @@ namespace CreatureAI
             int mask = obstacleMask.value;
             if (mask == 0) mask = ~0;
 
+            // UdonSharp で確実に通る 5 引数の Raycast(QueryTriggerInteraction は使わない)。
             RaycastHit hit;
-            return !Physics.Raycast(origin, dir, out hit, probeDistance,
-                mask, QueryTriggerInteraction.Ignore);
+            return !Physics.Raycast(origin, dir, out hit, probeDistance, mask);
         }
 
         /// <summary>水平ベクトルを Y 軸まわりに angle 度回す(Quaternion を使わない軽量版)。</summary>
