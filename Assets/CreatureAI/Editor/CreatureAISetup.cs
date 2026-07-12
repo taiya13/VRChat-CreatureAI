@@ -350,6 +350,68 @@ namespace CreatureAI.EditorTools
                 "obstacleMask に指定すると、プレイヤーや Pickup を誤検知しません。", "OK");
         }
 
+        // ================= メニュー 8: シーンの壊れた Udon を検出 =================
+
+        /// <summary>
+        /// シーン内の全 UdonBehaviour を走査し、「Program Source が無い(=壊れている)」ものを
+        /// GameObject 名(階層パス)付きで報告する。ClientSim が出す「InvalidObject at N /
+        /// Found N errors while configuring network IDs!」は番号しか出さず、どのオブジェクトが
+        /// 原因か分からないため、これで名前を特定する。多くは、依存関係の欠けた外部プレハブ
+        /// (家・家具など)が持つ壊れた Udon。ログをクリックすると該当オブジェクトを選択できる。
+        /// </summary>
+        [MenuItem("CreatureAI/8. シーンの壊れた Udon を検出", false, 19)]
+        public static void ScanBrokenUdon()
+        {
+            VRC.Udon.UdonBehaviour[] all =
+                UnityEngine.Object.FindObjectsOfType<VRC.Udon.UdonBehaviour>(true);
+
+            int broken = 0;
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            foreach (VRC.Udon.UdonBehaviour ub in all)
+            {
+                if (ub == null) continue;
+                if (ub.programSource == null)
+                {
+                    broken++;
+                    string path = HierarchyPath(ub.transform);
+                    sb.Append("・").Append(path).Append("\n");
+                    // context を渡すと、Console のログをクリックで該当オブジェクトへジャンプできる。
+                    Debug.LogWarning("[CreatureAI] 壊れ Udon(Program Source 無し): " + path, ub.gameObject);
+                }
+            }
+
+            Debug.Log("[CreatureAI] シーンの UdonBehaviour: 全 " + all.Length + " 個 / 壊れ " + broken + " 個");
+
+            string msg;
+            if (broken == 0)
+                msg = "シーンに壊れた Udon はありませんでした(全 " + all.Length + " 個)。\n" +
+                      "それでも動かない場合は、猫を作り直す(Cat を削除して『2. テスト用の猫を作成』)か、" +
+                      "ClientSim を一度 OFF/ON してみてください。";
+            else
+                msg = "壊れた Udon(Program Source 無し)を " + broken + " 個見つけました:\n\n" + sb +
+                      "\nこれらが『InvalidObject / network IDs エラー』の原因で、シーン全体の Udon を" +
+                      "止めています(猫も含む)。多くは外部プレハブ(家・家具)の Udon です。\n\n" +
+                      "対処: そのプレハブの依存パッケージを入れる、または上記オブジェクトの" +
+                      "UdonBehaviour を削除してください(Console のログをクリックで選択できます)。";
+
+            EditorUtility.DisplayDialog("CreatureAI 壊れ Udon 検出", msg, "OK");
+        }
+
+        /// <summary>Transform の階層パス(Root/Child/…/This)を返す。</summary>
+        private static string HierarchyPath(Transform t)
+        {
+            string p = t.name;
+            Transform cur = t.parent;
+            int guard = 0;
+            while (cur != null && guard < 64)
+            {
+                p = cur.name + "/" + p;
+                cur = cur.parent;
+                guard++;
+            }
+            return p;
+        }
+
         // ================= メニュー 9: 壊れアセット掃除(単体) =================
 
         [MenuItem("CreatureAI/9. 壊れた Program Asset を掃除", false, 20)]
