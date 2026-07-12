@@ -65,9 +65,10 @@ namespace CreatureAI
         [Range(1, 6)]
         public int probeSteps = 3;
 
-        [Tooltip("一度避け始めた側を優先し続ける秒数(ジグザグ振動を抑える)。")]
+        [Tooltip("一度避け始めた側を維持し続ける秒数(壁の前で左右に迷うのを防ぐ)。" +
+                 "大きいほど一方向に決めて壁沿いに回り込む。小さいと融通は利くが振動しやすい。")]
         [Min(0f)]
-        public float turnCommitTime = 0.6f;
+        public float turnCommitTime = 1.0f;
 
         // --- 診断用に最後の探査結果を保持(Editor Gizmo が読む / Inspector 非表示) ---
         [HideInInspector] public Vector3 lastOrigin;
@@ -104,52 +105,56 @@ namespace CreatureAI
             float minProbe = clearance + stepLen;
             if (probe < minProbe) probe = minProbe;
 
-            // 1. 正面が十分空いていれば素直に前進(避けコミット解除)。
+            float now = Time.time;
+            float stepDeg = maxAvoidAngle / probeSteps;
+
+            // 1. 正面が十分空いている → 目的地へ直進。
+            //    ただし「避けている側」の記憶は即座には消さず、turnCommitTime 続けてクリアだった
+            //    ときだけ解除する。一瞬のクリアで side をリセットすると、次に塞がった時に左右を
+            //    選び直して振動する(壁の前で右往左往する)ため。
             float dFwd = FreeDistance(lastOrigin, desiredDir, probe);
             if (dFwd >= probe)
             {
-                avoidSign = 0;
+                if (now >= avoidCommitUntil) avoidSign = 0; // 十分クリアが続いた → 回避終了
                 lastBlocked = false;
                 lastChosenDir = desiredDir;
                 return desiredDir * stepLen;
             }
 
+            // 2. 前が塞がれている = 回避が必要。
             lastBlocked = true;
-            float now = Time.time;
-            int preferred = (now < avoidCommitUntil) ? avoidSign : 0; // 直近で避けた側を優先
 
-            // にじり寄り用: これまでで最も遠くまで空いている方向を記録しておく。
-            Vector3 bestDir = desiredDir;
+            // 避ける側を決める。一度決めたら維持する(＝左右で迷わない)。未決のときだけ、
+            // 「より開けている側」へ回り込むよう決定する。塞がれている間はコミットを延長し続ける。
+            if (avoidSign == 0)
+            {
+                float dL0 = FreeDistance(lastOrigin, RotateY(desiredDir, -stepDeg), probe);
+                float dR0 = FreeDistance(lastOrigin, RotateY(desiredDir, stepDeg), probe);
+                avoidSign = (dL0 >= dR0) ? -1 : 1;
+            }
+            avoidCommitUntil = now + turnCommitTime;
+
+            // 3. 決めた側で、目的地寄り(小さい角度)から順に、通れる方向を探す(壁沿いに滑らかに)。
+            Vector3 bestDir = RotateY(desiredDir, stepDeg * avoidSign);
             float bestFree = dFwd;
-
-            // 2. 角度を段階的に広げ、左右で「十分空いた」方向を探す。
-            float stepDeg = maxAvoidAngle / probeSteps;
             for (int i = 1; i <= probeSteps; i++)
             {
-                float ang = stepDeg * i;
-                Vector3 left = RotateY(desiredDir, -ang);
-                Vector3 right = RotateY(desiredDir, ang);
-                float dL = FreeDistance(lastOrigin, left, probe);
-                float dR = FreeDistance(lastOrigin, right, probe);
-
-                if (dL >= probe && dR >= probe)
-                {
-                    // 両方空き → 優先側を維持。未コミットなら個体差のためランダムに決める。
-                    int sign = preferred;
-                    if (sign == 0) sign = (Random.value < 0.5f) ? -1 : 1;
-                    Commit(sign, now);
-                    lastChosenDir = (sign < 0) ? left : right;
-                    return lastChosenDir * stepLen;
-                }
-                if (dL >= probe) { Commit(-1, now); lastChosenDir = left; return left * stepLen; }
-                if (dR >= probe) { Commit(1, now); lastChosenDir = right; return right * stepLen; }
-
-                if (dL > bestFree) { bestFree = dL; bestDir = left; }
-                if (dR > bestFree) { bestFree = dR; bestDir = right; }
+                Vector3 d = RotateY(desiredDir, stepDeg * i * avoidSign);
+                float dd = FreeDistance(lastOrigin, d, probe);
+                if (dd >= probe) { lastChosenDir = d; return d * stepLen; }
+                if (dd > bestFree) { bestFree = dd; bestDir = d; }
             }
 
-            // 3. どの方向も十分には空いていない(家具の多い室内など)。
-            //    最も空いている方向へ「障害物の clearance 手前まで」進む(にじり寄り)。
+            // 4. 決めた側が全滅 → 反対側へ切替を試す(袋小路・行き止まりの脱出)。
+            for (int i = 1; i <= probeSteps; i++)
+            {
+                Vector3 d = RotateY(desiredDir, -stepDeg * i * avoidSign);
+                float dd = FreeDistance(lastOrigin, d, probe);
+                if (dd >= probe) { avoidSign = -avoidSign; lastChosenDir = d; return d * stepLen; }
+                if (dd > bestFree) { bestFree = dd; bestDir = d; }
+            }
+
+            // 5. どの方向も十分には空いていない → 最も空いた方向へ clearance 手前までにじり寄り。
             float creep = bestFree - clearance;
             if (creep <= 0.005f)
             {
@@ -159,12 +164,6 @@ namespace CreatureAI
             if (creep > stepLen) creep = stepLen;
             lastChosenDir = bestDir;
             return bestDir * creep;
-        }
-
-        private void Commit(int sign, float now)
-        {
-            avoidSign = sign;
-            avoidCommitUntil = now + turnCommitTime;
         }
 
         /// <summary>
