@@ -200,9 +200,10 @@ namespace CreatureAI
             Vector3 dir = flat / dist;
             Vector3 disp = StepWithAvoidance(pos, dir, speed, dist);
 
-            // 徘徊先が壁の向こう等で塞がれて進めない → その目的地は諦めて別の場所を選び直す
+            // 徘徊先が家具の中・壁の向こう等でほぼ進めない → その目的地は諦めて選び直す
             // (徘徊は「どこでもよい散歩」なので、無理に到達しようとして固まらせない)。
-            if (disp.sqrMagnitude < 0.0000001f)
+            float expected = speed * Time.deltaTime;
+            if (disp.magnitude < expected * 0.25f)
             {
                 hasWanderTarget = false;
                 wanderActive = false;
@@ -283,7 +284,8 @@ namespace CreatureAI
         /// <summary>
         /// desiredDir(正規化)へ speed で1フレーム進む変位を返す(障害物回避込み)。
         /// CreatureLocomotion があれば回避補正し、無ければ従来どおり直進する(null 安全)。
-        /// maxDist は目的地までの距離(行き過ぎ防止)。逃走など上限が無い場合は Infinity を渡す。
+        /// maxDist は目的地までの距離(行き過ぎ防止 + それより先の障害物を無視する先読み上限)。
+        /// 逃走など上限が無い場合は Infinity を渡す。
         /// </summary>
         private Vector3 StepWithAvoidance(Vector3 pos, Vector3 desiredDir, float speed, float maxDist)
         {
@@ -291,7 +293,7 @@ namespace CreatureAI
             if (stepLen > maxDist) stepLen = maxDist; // 行き過ぎ防止
 
             if (locomotion != null)
-                return locomotion.ComputeMove(pos, desiredDir, stepLen);
+                return locomotion.ComputeMove(pos, desiredDir, stepLen, maxDist);
             return desiredDir * stepLen; // 従来動作(回避コンポーネント無し)
         }
 
