@@ -195,8 +195,14 @@ namespace CreatureAI.EditorTools
             {
                 catAnimator.animator = anim;
                 // 参照フィールドは Udon 側へも確実にコピーしておく(実行時に animator=null に
-                // ならないようにする。他コンポーネントと同じ扱い)。
-                UdonSharpEditorUtility.CopyProxyToUdon(catAnimator);
+                // ならないようにする)。失敗しても後続の生成(ポイント/デバッグ表示)を止めない
+                // ように try/catch で囲む。実行時にも CreatureAnimator が Animator を自動解決する。
+                try { UdonSharpEditorUtility.CopyProxyToUdon(catAnimator); }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[CreatureAI Setup] animator 参照の Udon コピーに失敗" +
+                        "(実行時に自動解決されるため問題ありません): " + e.Message);
+                }
                 EditorUtility.SetDirty(catAnimator);
             }
 
