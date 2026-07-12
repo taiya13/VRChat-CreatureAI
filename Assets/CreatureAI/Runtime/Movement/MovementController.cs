@@ -55,6 +55,7 @@ namespace CreatureAI
         private CreatureBrain brain;
         private ThreatEvaluator threat;
         private CreaturePersonality personality;
+        private CreatureLocomotion locomotion; // 障害物回避ステアリング(あれば移動方向を補正)
         private bool debugLog = true;
 
         private CreaturePoint lastTarget = null;
@@ -79,6 +80,7 @@ namespace CreatureAI
             brain = GetComponent<CreatureBrain>();
             threat = GetComponent<ThreatEvaluator>();
             personality = GetComponent<CreaturePersonality>(); // 活発さ/好奇心/臆病さ が移動に影響
+            locomotion = GetComponent<CreatureLocomotion>();   // 無ければ従来どおり直進(null 安全)
             CreatureCore core = GetComponent<CreatureCore>();
             if (core != null) debugLog = core.debugLog;
 
@@ -133,16 +135,14 @@ namespace CreatureAI
                 return; // 停止
             }
 
-            // --- 移動 ---
+            // --- 移動(障害物回避込み) ---
             float speed = BaseSpeed();
-            Vector3 dir = flat / dist; // 正規化した水平方向
-            Vector3 step = dir * speed * Time.deltaTime;
-            if (step.magnitude > dist) step = flat; // 行き過ぎ防止(スナップ)
-            transform.position = pos + step;
+            Vector3 dir = flat / dist; // 正規化した水平方向(目的地方向)
+            Vector3 disp = StepWithAvoidance(pos, dir, speed, dist);
+            transform.position = pos + disp;
 
-            // --- 向き(進行方向へ回頭) ---
-            Quaternion look = Quaternion.LookRotation(dir, Vector3.up);
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, look, turnSpeed * Time.deltaTime);
+            // --- 向き(実際に進んだ方向へ回頭。回避で曲がれば自然にそちらを向く) ---
+            FaceMovement(disp, dir);
         }
 
         /// <summary>現在の TargetPoint に到着済みか(後フェーズの ActionRunner が参照)。</summary>
@@ -198,12 +198,21 @@ namespace CreatureAI
             wanderActive = true;
             float speed = BaseSpeed() * wanderSpeedMultiplier;
             Vector3 dir = flat / dist;
-            Vector3 step = dir * speed * Time.deltaTime;
-            if (step.magnitude > dist) step = flat;
-            transform.position = pos + step;
+            Vector3 disp = StepWithAvoidance(pos, dir, speed, dist);
 
-            Quaternion look = Quaternion.LookRotation(dir, Vector3.up);
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, look, turnSpeed * Time.deltaTime);
+            // 徘徊先が壁の向こう等で塞がれて進めない → その目的地は諦めて別の場所を選び直す
+            // (徘徊は「どこでもよい散歩」なので、無理に到達しようとして固まらせない)。
+            if (disp.sqrMagnitude < 0.0000001f)
+            {
+                hasWanderTarget = false;
+                wanderActive = false;
+                float pmult = (personality != null) ? personality.GetWanderPauseMult() : 1f;
+                wanderPauseUntil = Time.time + Random.Range(wanderPauseMin, wanderPauseMax) * 0.5f * pmult;
+                return;
+            }
+
+            transform.position = pos + disp;
+            FaceMovement(disp, dir);
         }
 
         private void PickWanderTarget()
@@ -261,9 +270,37 @@ namespace CreatureAI
             // 臆病な猫ほど速く逃げる。
             float fleeMult = (personality != null) ? personality.GetFleeSpeedMult() : 1f;
             float speed = BaseSpeed() * fleeSpeedMultiplier * fleeMult;
-            transform.position = pos + fleeDir * speed * Time.deltaTime;
 
-            Quaternion look = Quaternion.LookRotation(fleeDir, Vector3.up);
+            // 逃走中も壁は避ける(パニックで壁にめり込まない)。目的地距離の制限は無いので大きい値。
+            Vector3 disp = StepWithAvoidance(pos, fleeDir, speed, Mathf.Infinity);
+            transform.position = pos + disp;
+
+            FaceMovement(disp, fleeDir);
+        }
+
+        // ================= 移動の共通処理(障害物回避 + 向き) =================
+
+        /// <summary>
+        /// desiredDir(正規化)へ speed で1フレーム進む変位を返す(障害物回避込み)。
+        /// CreatureLocomotion があれば回避補正し、無ければ従来どおり直進する(null 安全)。
+        /// maxDist は目的地までの距離(行き過ぎ防止)。逃走など上限が無い場合は Infinity を渡す。
+        /// </summary>
+        private Vector3 StepWithAvoidance(Vector3 pos, Vector3 desiredDir, float speed, float maxDist)
+        {
+            float stepLen = speed * Time.deltaTime;
+            if (stepLen > maxDist) stepLen = maxDist; // 行き過ぎ防止
+
+            if (locomotion != null)
+                return locomotion.ComputeMove(pos, desiredDir, stepLen);
+            return desiredDir * stepLen; // 従来動作(回避コンポーネント無し)
+        }
+
+        /// <summary>実際に進んだ方向(disp)へ回頭する。停止中(disp≈0)は desiredDir を向く。</summary>
+        private void FaceMovement(Vector3 disp, Vector3 desiredDir)
+        {
+            Vector3 faceDir = (disp.sqrMagnitude > 0.0000001f) ? disp.normalized : desiredDir;
+            if (faceDir.sqrMagnitude < 0.0000001f) return;
+            Quaternion look = Quaternion.LookRotation(faceDir, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, look, turnSpeed * Time.deltaTime);
         }
 

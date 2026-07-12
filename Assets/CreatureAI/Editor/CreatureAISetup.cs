@@ -35,6 +35,7 @@ namespace CreatureAI.EditorTools
             typeof(CreatureBrain),
             typeof(CreatureTargetSelector),
             typeof(MovementController),
+            typeof(CreatureLocomotion),
             typeof(ActionRunner),
             typeof(ThreatEvaluator),
             typeof(CreatureAnimator),
@@ -175,6 +176,7 @@ namespace CreatureAI.EditorTools
             AddUdonSharp<CreatureBrain>(cat);
             AddUdonSharp<CreatureTargetSelector>(cat);
             AddUdonSharp<MovementController>(cat);
+            AddUdonSharp<CreatureLocomotion>(cat); // 障害物回避ステアリング
             AddUdonSharp<ActionRunner>(cat);
             AddUdonSharp<ThreatEvaluator>(cat);
             AddUdonSharp<CreatureAnimator>(cat);
@@ -313,6 +315,39 @@ namespace CreatureAI.EditorTools
                 "▶ Play 後、頭上 HUD の『Motion : … (Anim×n)』で接続数を確認できます。\n" +
                 "n が 0 のときは、モデル側 Animator に MotionState を持つ Controller を" +
                 "割り当ててください。", "OK");
+        }
+
+        // ================= メニュー 4: テスト用の壁を作成 =================
+
+        /// <summary>
+        /// 障害物回避のテスト用に、猫の通り道を塞ぐ壁(コライダー付き)を置く。
+        /// Cat(原点付近)→ FoodBowl(3,0,0)の間に立てるので、猫は壁を避けて回り込む。
+        /// 既定の障害物レイヤー(全レイヤー)に載るので、そのまま回避対象になる。
+        /// </summary>
+        [MenuItem("CreatureAI/4. テスト用の壁を作成", false, 4)]
+        public static void CreateTestWall()
+        {
+            int n = 0;
+            foreach (GameObject g in UnityEngine.Object.FindObjectsOfType<GameObject>())
+                if (g.name.StartsWith("TestWall")) n++;
+            string wallName = (n == 0) ? "TestWall" : ("TestWall " + (n + 1));
+
+            // コライダーを残す(=障害物として機能する)。AddVisual はコライダーを消すので使わない。
+            GameObject wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.name = wallName;
+            Undo.RegisterCreatedObjectUndo(wall, "Create CreatureAI Test Wall");
+            wall.transform.position = new Vector3(1.5f, 0.6f, 0f + n * 0.5f);
+            wall.transform.localScale = new Vector3(0.3f, 1.2f, 2.5f); // 通り道を部分的に塞ぐ
+            SetColor(wall, new Color(0.6f, 0.6f, 0.65f));
+
+            Selection.activeGameObject = wall;
+            EditorUtility.DisplayDialog("CreatureAI",
+                "「" + wallName + "」(コライダー付き)を Cat と FoodBowl の間に置きました。\n\n" +
+                "▶ Play で、猫が壁を貫通せず回り込むか確認してください。\n" +
+                "回避が強すぎ/弱いときは Cat の CreatureLocomotion で\n" +
+                "probeDistance(先読み距離)や maxAvoidAngle を調整できます。\n\n" +
+                "※ 実ワールドでは、壁・家具のレイヤーだけを CreatureLocomotion の\n" +
+                "obstacleMask に指定すると、プレイヤーや Pickup を誤検知しません。", "OK");
         }
 
         // ================= メニュー 9: 壊れアセット掃除(単体) =================

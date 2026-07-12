@@ -10,6 +10,7 @@ VRChat SDK3 Worlds + UdonSharp 向けの、猫(生き物)AI フレームワー�
 - 欲求(空腹・眠気ほか)が時間で増え、閾値を超えると行動を開始する
 - 対応する地点(餌・水・ベッド・爪とぎ等)を探して予約・移動・行動し、欲求を回復する
 - Idle 中は起点の周りをうろうろ徘徊する
+- 壁や家具(コライダー)を Raycast で検知し、貫通せず自然に回り込む(CreatureLocomotion)
 - プレイヤーが近づくと行動を中断してジグザグに逃げ、離れると生活に戻る
 - 状態に応じてアニメーションを切り替える(Idle/Walk/Eat/Sleep/Flee/Drink/Scratch ほか)
 - 性格(臆病さ/好奇心/活発さ/のんびりさ)で行動傾向が変わる
@@ -24,7 +25,7 @@ CreatureCore ── 参照キャッシュ + 単一 Tick ループ + 割込み指
   対応表      : CreatureActionCatalog(Goal⇔Need⇔PointType⇔Motion⇔表示名 の唯一の定義)
   ターゲット  : CreatureTargetSelector(Goal→地点を予約) / CreaturePointSensor / CreaturePointRegistry
   行動層      : ActionRunner(占有・回復・状態 AgentState・単一中断 AbortCurrent)
-  身体制御    : MovementController(移動/徘徊/逃走) / CreatureAnimator(状態→Animator)
+  身体制御    : MovementController(移動/徘徊/逃走) / CreatureLocomotion(障害物回避) / CreatureAnimator(状態→Animator)
   反射・警戒  : ThreatEvaluator(危険検知)
   性格        : CreaturePersonality(各層へ倍率を提供)
   ワールド    : CreaturePoint(餌・水・ベッド・爪とぎ等)
@@ -67,9 +68,10 @@ docs/                            … 各フェーズと v1.0 の解説
 ```
 
 ## ドキュメント
-`docs/Phase1〜8` に各機能の詳細、`docs/v1.0_Review.md` に v1.0 の
+`docs/Phase1〜9` に各機能の詳細、`docs/v1.0_Review.md` に v1.0 の
 アーキテクチャ評価・拡張性・不足点、`docs/v1.1_AssetReady.md` に対応表の集約と
-「アセット/アニメ/地点/Action の追加手順」をまとめてある。
+「アセット/アニメ/地点/Action の追加手順」、`docs/Phase9_Locomotion.md` に
+障害物回避(CreatureLocomotion)の詳細をまとめてある。
 
 ## 差し替え(自分のモデル/アニメ)
 - 見た目: Cat 直下の `Body`(仮のカプセル)を消して自分のモデルを置く。

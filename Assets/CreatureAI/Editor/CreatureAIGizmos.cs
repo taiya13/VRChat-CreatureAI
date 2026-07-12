@@ -144,6 +144,54 @@ namespace CreatureAI.EditorTools
             }
         }
 
+        // ================= CreatureLocomotion(障害物回避の可視化) =================
+
+        [DrawGizmo(GizmoType.NonSelected | GizmoType.Selected | GizmoType.Pickable)]
+        private static void DrawLocomotion(CreatureLocomotion loco, GizmoType gizmoType)
+        {
+            // 編集時: 前方の先読み距離(probeDistance)を薄く示す。
+            Vector3 basePos = loco.transform.position + Vector3.up * loco.rayHeight;
+            Vector3 fwd = loco.transform.forward; fwd.y = 0f;
+            if (fwd.sqrMagnitude > 0.0001f) fwd = fwd.normalized; else fwd = Vector3.forward;
+
+            if (!Application.isPlaying)
+            {
+                Gizmos.color = new Color(0.5f, 0.8f, 1f, 0.5f);
+                Gizmos.DrawLine(basePos, basePos + fwd * loco.probeDistance);
+                return;
+            }
+
+            // 実行時: 望んだ方向(灰)と、回避で選んだ方向(緑=進める/赤=塞がれ停止)を描く。
+            object oo = GetVar(loco, "lastOrigin");
+            object od = GetVar(loco, "lastDesiredDir");
+            object oc = GetVar(loco, "lastChosenDir");
+            object bo = GetVar(loco, "lastBlocked");
+            if (oo == null || od == null || oc == null) return; // まだ一度も探査していない
+
+            Vector3 origin = (Vector3)oo;
+            Vector3 desired = (Vector3)od;
+            Vector3 chosen = (Vector3)oc;
+            bool blocked = (bo != null) && (bool)bo;
+
+            if (origin == Vector3.zero) origin = basePos;
+
+            if (desired.sqrMagnitude > 0.0001f)
+            {
+                Gizmos.color = new Color(0.7f, 0.7f, 0.7f, 0.7f); // 望んだ方向
+                Gizmos.DrawLine(origin, origin + desired.normalized * loco.probeDistance);
+            }
+            if (chosen.sqrMagnitude > 0.0001f)
+            {
+                Gizmos.color = blocked ? OccupiedColor : FreeColor; // 選んだ方向(赤/緑)
+                Gizmos.DrawLine(origin, origin + chosen.normalized * loco.probeDistance);
+            }
+            else if (blocked)
+            {
+                Gizmos.color = OccupiedColor;
+                Gizmos.DrawWireSphere(origin, 0.25f); // 全方向塞がれ = その場停止
+            }
+        }
+
         // ================= ヘルパー =================
 
         private static object GetVar(Component proxy, string name)
