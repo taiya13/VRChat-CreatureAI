@@ -80,7 +80,7 @@ namespace CreatureAI
             if (actionCatalog == null)
                 Debug.LogWarning("[CreatureCore] CreatureActionCatalog が見つかりません。Cat 本体に " +
                     "CreatureActionCatalog を付けてください: " + name);
-            if (statusDisplay != null) statusDisplay.Initialize(needsData, brain, targetSelector, pointSensor, actionRunner);
+            if (statusDisplay != null) statusDisplay.Initialize(needsData, brain, targetSelector, pointSensor, actionRunner, creatureAnimator);
 
             if (profile == null)
                 Debug.LogWarning("[CreatureCore] Profile が見つかりません。子オブジェクト 'Profile' に " +

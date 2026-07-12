@@ -28,15 +28,18 @@ namespace CreatureAI
         private CreatureTargetSelector targetSelector;
         private CreaturePointSensor sensor;
         private ActionRunner actionRunner;
+        private CreatureAnimator creatureAnimator;
 
         public void Initialize(NeedsData data, CreatureBrain creatureBrain,
-            CreatureTargetSelector selector, CreaturePointSensor pointSensor, ActionRunner runner)
+            CreatureTargetSelector selector, CreaturePointSensor pointSensor, ActionRunner runner,
+            CreatureAnimator anim)
         {
             needsData = data;
             brain = creatureBrain;
             targetSelector = selector;
             sensor = pointSensor;
             actionRunner = runner;
+            creatureAnimator = anim;
         }
 
         /// <summary>CreatureCore の Tick から毎回呼ばれ、Text を最新状態に更新する。</summary>
@@ -60,11 +63,18 @@ namespace CreatureAI
             float thirst = (needsData != null) ? needsData.GetValue(NeedType.Thirst) : 0f;
             float scratch = (needsData != null) ? needsData.GetValue(NeedType.Scratchiness) : 0f;
 
+            // モーションの診断表示: 現在の動作種別と、反映先 Animator の数。
+            // 「Anim×0」なら MotionState を持つ Animator が接続されていない(接続不良)。
+            string motion = "-";
+            if (creatureAnimator != null)
+                motion = creatureAnimator.GetMotionName() + "  (Anim×" + creatureAnimator.GetTargetCount() + ")";
+
             string s =
                 "<b>" + displayName + "</b>   [" + agentState + "]\n" +
                 "Goal   : " + goal + "   (top: " + reason + ")\n" +
                 "Target : " + target + "\n" +
                 "Action : " + action + "   Cands: " + cands + "\n" +
+                "Motion : " + motion + "\n" +
                 "\n" +
                 "Hunger       " + Bar(hunger) + " " + Pct(hunger) + "\n" +
                 "Sleepiness   " + Bar(sleep) + " " + Pct(sleep) + "\n" +

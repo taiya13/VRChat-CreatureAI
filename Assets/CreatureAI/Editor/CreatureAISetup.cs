@@ -4,6 +4,7 @@ using UdonSharp;
 using UdonSharpEditor;
 using UnityEditor;
 using UnityEditor.Animations;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -176,7 +177,7 @@ namespace CreatureAI.EditorTools
             AddUdonSharp<MovementController>(cat);
             AddUdonSharp<ActionRunner>(cat);
             AddUdonSharp<ThreatEvaluator>(cat);
-            CreatureAnimator catAnimator = AddUdonSharp<CreatureAnimator>(cat);
+            AddUdonSharp<CreatureAnimator>(cat);
             AddUdonSharp<CreatureActionCatalog>(cat); // Goal⇔Need⇔Point⇔Motion⇔Name の対応表
             AddUdonSharp<CreaturePersonality>(cat);
             AddUdonSharp<CreaturePointSensor>(cat);
@@ -186,25 +187,14 @@ namespace CreatureAI.EditorTools
                 new Vector3(0f, 0.35f, 0f), new Vector3(0.35f, 0.35f, 0.35f),
                 new Color(0.95f, 0.6f, 0.2f));
 
-            // Animator と自動生成の AnimatorController を用意して割り当てる。
+            // Animator と自動生成の AnimatorController を用意する(Cat ルートに1つ)。
+            // CreatureAnimator.animator への明示割り当てはしない: 実行時に
+            // 「MotionState を持つ配下の全 Animator」を自動検出して反映するため、
+            // 差し替えモデル付属の Animator にも自動で値が届く。
             AnimatorController controller = EnsureAnimatorController();
             Animator anim = Undo.AddComponent<Animator>(cat);
             anim.applyRootMotion = false;
             if (controller != null) anim.runtimeAnimatorController = controller;
-            if (catAnimator != null)
-            {
-                catAnimator.animator = anim;
-                // 参照フィールドは Udon 側へも確実にコピーしておく(実行時に animator=null に
-                // ならないようにする)。失敗しても後続の生成(ポイント/デバッグ表示)を止めない
-                // ように try/catch で囲む。実行時にも CreatureAnimator が Animator を自動解決する。
-                try { UdonSharpEditorUtility.CopyProxyToUdon(catAnimator); }
-                catch (Exception e)
-                {
-                    Debug.LogWarning("[CreatureAI Setup] animator 参照の Udon コピーに失敗" +
-                        "(実行時に自動解決されるため問題ありません): " + e.Message);
-                }
-                EditorUtility.SetDirty(catAnimator);
-            }
 
             GameObject profile = new GameObject("Profile");
             profile.transform.SetParent(cat.transform, false);
@@ -271,28 +261,58 @@ namespace CreatureAI.EditorTools
                 return;
             }
 
-            // シーン内の全 Cat(CreatureAnimator を持つ Animator)へ割り当て直す。
-            int reassigned = 0;
+            // シーン内の全 Cat へ Controller を行き渡らせる。
+            //  ・Controller が空の Animator(旧 Controller 削除で外れたもの・差し替えモデル付属の
+            //    もの)には生成 Controller を割り当てる。
+            //  ・自作 Controller が入っている Animator はそのまま(上書きしない。ただし
+            //    MotionState パラメータが無いと反映対象にならない点に注意)。
+            //  ・CreatureAnimator.animator の明示指定は解除し、実行時の自動検出
+            //    (MotionState を持つ配下の全 Animator へ反映)に戻す。
+            int assigned = 0, cats = 0;
             foreach (CreatureAnimator ca in UnityEngine.Object.FindObjectsOfType<CreatureAnimator>())
             {
-                Animator anim = ca.animator;
-                if (anim == null) anim = ca.GetComponent<Animator>();
-                if (anim == null) anim = ca.GetComponentInChildren<Animator>();
-                if (anim == null) continue;
+                cats++;
+                Animator[] anims = ca.GetComponentsInChildren<Animator>(true);
 
-                anim.runtimeAnimatorController = ac;
-                ca.animator = anim;
-                try { UdonSharpEditorUtility.CopyProxyToUdon(ca); } catch { }
-                EditorUtility.SetDirty(anim);
-                EditorUtility.SetDirty(ca);
-                reassigned++;
+                if (anims == null || anims.Length == 0)
+                {
+                    // Animator が1つも無い(消された)場合はルートに付け直す。
+                    Animator ra = Undo.AddComponent<Animator>(ca.gameObject);
+                    ra.applyRootMotion = false;
+                    ra.runtimeAnimatorController = ac;
+                    EditorUtility.SetDirty(ra);
+                    assigned++;
+                }
+                else
+                {
+                    foreach (Animator a in anims)
+                    {
+                        if (a.runtimeAnimatorController == null)
+                        {
+                            a.runtimeAnimatorController = ac;
+                            EditorUtility.SetDirty(a);
+                            assigned++;
+                        }
+                    }
+                }
+
+                if (ca.animator != null)
+                {
+                    ca.animator = null; // 明示指定を解除 → 自動検出へ
+                    try { UdonSharpEditorUtility.CopyProxyToUdon(ca); } catch { }
+                    EditorUtility.SetDirty(ca);
+                }
             }
+            if (!Application.isPlaying) EditorSceneManager.MarkAllScenesDirty();
 
             EditorUtility.DisplayDialog("CreatureAI",
                 "AnimatorController を再生成しました(全モーション対応)。\n" +
-                "シーンの Cat " + reassigned + " 匹の Animator に割り当て直しました。\n\n" +
-                "▶ Play で Walk/Eat/Sleep/Flee 等へ遷移するか確認してください。\n" +
-                "(自作クリップは各状態の Motion を差し替えてください)", "OK");
+                "Cat " + cats + " 匹を確認し、Controller が空だった Animator " + assigned +
+                " 件に割り当てました。\n\n" +
+                "反映先は実行時に自動検出されます(MotionState を持つ配下の全 Animator)。\n" +
+                "▶ Play 後、頭上 HUD の『Motion : … (Anim×n)』で接続数を確認できます。\n" +
+                "n が 0 のときは、モデル側 Animator に MotionState を持つ Controller を" +
+                "割り当ててください。", "OK");
         }
 
         // ================= メニュー 9: 壊れアセット掃除(単体) =================
