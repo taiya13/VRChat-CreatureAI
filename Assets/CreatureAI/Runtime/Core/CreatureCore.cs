@@ -46,6 +46,7 @@ namespace CreatureAI
         [HideInInspector] public CreatureStatusDisplay statusDisplay;
         [HideInInspector] public CreatureProfile profile;
         [HideInInspector] public CreatureActionCatalog actionCatalog;
+        [HideInInspector] public CreatureIdleBehavior idleBehavior;
 
         // このネコが同梱する Registry(選出結果の確認・タイムアウト掃除に使う)。
         private CreaturePointRegistry localRegistry;
@@ -65,6 +66,7 @@ namespace CreatureAI
             creatureAnimator = GetComponent<CreatureAnimator>();
             pointSensor = GetComponent<CreaturePointSensor>();
             actionCatalog = GetComponent<CreatureActionCatalog>();
+            idleBehavior = GetComponent<CreatureIdleBehavior>();
             statusDisplay = GetComponentInChildren<CreatureStatusDisplay>();
             profile = GetComponentInChildren<CreatureProfile>();
             localRegistry = GetComponentInChildren<CreaturePointRegistry>();
@@ -75,7 +77,8 @@ namespace CreatureAI
             if (brain != null) brain.Initialize(needsData, profile, actionCatalog);
             if (targetSelector != null) targetSelector.Initialize(brain, pointSensor, actionCatalog);
             if (actionRunner != null) actionRunner.Initialize(brain, targetSelector, movementController, needsController, profile, actionCatalog);
-            if (creatureAnimator != null) creatureAnimator.Initialize(brain, actionRunner, actionCatalog);
+            if (idleBehavior != null) idleBehavior.Initialize(needsData, actionRunner);
+            if (creatureAnimator != null) creatureAnimator.Initialize(brain, actionRunner, actionCatalog, idleBehavior);
 
             if (actionCatalog == null)
                 Debug.LogWarning("[CreatureCore] CreatureActionCatalog が見つかりません。Cat 本体に " +
@@ -104,7 +107,9 @@ namespace CreatureAI
 
             // 最優先・毎 Tick: 危険検知と割込み(Threat → AbortCurrent → Goal切替)。
             //   反応速度が要るので低頻度ブロックには入れず毎 Tick 評価する。
-            if (threatEvaluator != null)
+            //   fleeEnabled が OFF の間は丸ごとスキップ(＝逃げない)。ThreatEvaluator は
+            //   削除せず温存してあるので、ON にすれば即座に従来どおり逃げるようになる。
+            if (threatEvaluator != null && threatEvaluator.fleeEnabled)
             {
                 threatEvaluator.Check();
                 if (brain != null)
@@ -136,6 +141,9 @@ namespace CreatureAI
 
             // 行動実行は毎 Tick(到着後の回復を進める)。
             if (actionRunner != null) actionRunner.Tick();
+
+            // 自由行動(暇なときの所作)は毎 Tick(アニメ反映の前に決める)。
+            if (idleBehavior != null) idleBehavior.Tick();
 
             // 見た目への反映(状態→アニメーション)は毎 Tick。
             if (creatureAnimator != null) creatureAnimator.UpdateAnimation();

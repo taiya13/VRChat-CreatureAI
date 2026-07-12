@@ -38,6 +38,7 @@ namespace CreatureAI
         private CreatureBrain brain;
         private ActionRunner actionRunner;
         private CreatureActionCatalog catalog; // Goal→Motion / 表示名 の唯一の対応表
+        private CreatureIdleBehavior idle;     // 暇なときの自由行動(あれば Idle 演出を差し替え)
         private bool debugLog = true;
 
         private MotionKind currentKind = MotionKind.Idle;
@@ -51,11 +52,13 @@ namespace CreatureAI
         // パラメータの有無を判定する(無い Animator への書き込みは無視されて 0 が返る)。
         private const int ProbeValue = 63;
 
-        public void Initialize(CreatureBrain creatureBrain, ActionRunner runner, CreatureActionCatalog actionCatalog)
+        public void Initialize(CreatureBrain creatureBrain, ActionRunner runner,
+            CreatureActionCatalog actionCatalog, CreatureIdleBehavior idleBehavior)
         {
             brain = creatureBrain;
             actionRunner = runner;
             catalog = actionCatalog;
+            idle = idleBehavior;
             CreatureCore core = GetComponent<CreatureCore>();
             if (core != null) debugLog = core.debugLog;
             ResolveTargets();
@@ -180,6 +183,8 @@ namespace CreatureAI
 
             if (st == AgentState.Moving) return MotionKind.Walk;
 
+            // 暇なとき(Idle): 自由行動があればその演出(毛づくろい等)、無ければ素の待機。
+            if (idle != null) return idle.GetIdleMotion();
             return MotionKind.Idle;
         }
 

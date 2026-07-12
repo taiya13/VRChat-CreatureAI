@@ -192,6 +192,27 @@ namespace CreatureAI.EditorTools
             }
         }
 
+        // ================= CreatureGaze(視線の可視化) =================
+
+        [DrawGizmo(GizmoType.NonSelected | GizmoType.Selected | GizmoType.Pickable)]
+        private static void DrawGaze(CreatureGaze gaze, GizmoType gizmoType)
+        {
+            if (!Application.isPlaying) return;
+
+            object ht = GetVar(gaze, "hasTarget");
+            object tp = GetVar(gaze, "targetPos");
+            if (ht == null || tp == null || !(bool)ht) return;
+
+            Vector3 from = (gaze.headTransform != null)
+                ? gaze.headTransform.position
+                : gaze.transform.position + Vector3.up * 0.5f;
+            Vector3 to = (Vector3)tp;
+
+            Gizmos.color = new Color(1f, 0.9f, 0.3f, 0.9f); // 視線 = 黄
+            Gizmos.DrawLine(from, to);
+            Gizmos.DrawWireSphere(to, 0.12f);
+        }
+
         // ================= ヘルパー =================
 
         private static object GetVar(Component proxy, string name)
@@ -267,6 +288,14 @@ namespace CreatureAI.EditorTools
                 case 2: return "Eat";
                 case 3: return "Sleep";
                 case 4: return "Flee";
+                case 5: return "Drink";
+                case 6: return "Play";
+                case 7: return "Scratch";
+                case 8: return "Groom";
+                case 9: return "Stretch";
+                case 10: return "Yawn";
+                case 11: return "Sit";
+                case 12: return "LookAround";
                 default: return "Idle";
             }
         }

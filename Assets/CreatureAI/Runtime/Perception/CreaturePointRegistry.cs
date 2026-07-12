@@ -29,6 +29,11 @@ namespace CreatureAI
         private bool isActiveSingleton = false;
         private bool debugLog = true;
 
+        // 猫(生き物)の位置インデックス。視線システム(CreatureGaze)が「他の猫」を
+        // 探すのに使う。点と同じくこの singleton に集約する(FindObjectsOfType を避ける)。
+        private Transform[] creatures = new Transform[8];
+        private int creatureCount = 0;
+
         void Start()
         {
             // Registry は Cat の子なので、親の CreatureCore からログ設定を読む。
@@ -83,6 +88,42 @@ namespace CreatureAI
                     return;
                 }
             }
+        }
+
+        // ================= 猫(生き物)インデックス(視線システム用) =================
+
+        /// <summary>猫を登録する(CreatureGaze.Start から自分の transform を渡す)。重複は無視。</summary>
+        public void RegisterCreature(Transform t)
+        {
+            if (t == null) return;
+            for (int i = 0; i < creatureCount; i++) if (creatures[i] == t) return;
+            if (creatureCount >= creatures.Length)
+            {
+                Transform[] bigger = new Transform[creatures.Length * 2];
+                for (int i = 0; i < creatureCount; i++) bigger[i] = creatures[i];
+                creatures = bigger;
+            }
+            creatures[creatureCount] = t;
+            creatureCount++;
+        }
+
+        /// <summary>
+        /// from から radius 以内の他の猫(self を除く)を buffer に詰め、その数を返す。
+        /// 視線システムが「近くの他の猫」を探すのに使う。
+        /// </summary>
+        public int CollectNearbyCreatures(Vector3 from, Transform self, float radius, Transform[] buffer)
+        {
+            if (buffer == null) return 0;
+            int n = 0;
+            for (int i = 0; i < creatureCount && n < buffer.Length; i++)
+            {
+                Transform t = creatures[i];
+                if (t == null || t == self) continue;
+                if (Vector3.Distance(from, t.position) > radius) continue;
+                buffer[n] = t;
+                n++;
+            }
+            return n;
         }
 
         // ================= 検索 API =================

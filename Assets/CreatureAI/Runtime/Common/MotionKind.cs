@@ -27,8 +27,11 @@ namespace CreatureAI
         Drink = 5,    // 飲む
         Play = 6,     // 遊ぶ
         Scratch = 7,  // 爪とぎ
-        // --- 予約(状態は生成するが、まだ Goal に紐付いていない = 待機の演出候補) ---
-        Groom = 8,    // 毛づくろい
-        Stretch = 9,  // 伸び
+        // --- 自由行動(Idle 時の演出。CreatureIdleBehavior が選ぶ) ---
+        Groom = 8,      // 毛づくろい
+        Stretch = 9,    // 伸び
+        Yawn = 10,      // あくび
+        Sit = 11,       // 座る
+        LookAround = 12, // 見回す
     }
 }

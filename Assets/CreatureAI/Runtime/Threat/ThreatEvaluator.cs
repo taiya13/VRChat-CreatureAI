@@ -22,7 +22,12 @@ namespace CreatureAI
     /// </summary>
     public class ThreatEvaluator : UdonSharpBehaviour
     {
-        [Tooltip("プレイヤーがこの距離(m)以内に近づいたら危険とみなし Flee する。")]
+        [Tooltip("危険回避(プレイヤーから逃げる)を有効にするか。既定は OFF。" +
+                 "OFF の間は検知しても Flee しない(プレイヤーとの触れ合いを優先する方針)。" +
+                 "再び逃げさせたいときはこれを ON にするだけ(構造は温存)。")]
+        public bool fleeEnabled = false;
+
+        [Tooltip("プレイヤーがこの距離(m)以内に近づいたら危険とみなし Flee する(fleeEnabled が ON の時)。")]
         public float threatDistance = 3.0f;
 
         private bool threatened = false;

@@ -142,6 +142,9 @@ namespace CreatureAI
                 case MotionKind.Scratch: return "Scratch";
                 case MotionKind.Groom: return "Groom";
                 case MotionKind.Stretch: return "Stretch";
+                case MotionKind.Yawn: return "Yawn";
+                case MotionKind.Sit: return "Sit";
+                case MotionKind.LookAround: return "LookAround";
                 default: return "Idle";
             }
         }

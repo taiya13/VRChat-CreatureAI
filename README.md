@@ -11,7 +11,9 @@ VRChat SDK3 Worlds + UdonSharp 向けの、猫(生き物)AI フレームワー�
 - 対応する地点(餌・水・ベッド・爪とぎ等)を探して予約・移動・行動し、欲求を回復する
 - Idle 中は起点の周りをうろうろ徘徊する
 - 壁や家具(コライダー)を Raycast で検知し、貫通せず自然に回り込む(CreatureLocomotion)
-- プレイヤーが近づくと行動を中断してジグザグに逃げ、離れると生活に戻る
+- 暇な時間は Needs と性格に応じて自由行動(毛づくろい/あくび/伸び/見回す/座る/遊ぶ)を行う
+- 近くのプレイヤー・餌皿・他の猫へ、行動を中断せず視線(頭)だけを向ける
+- (任意)プレイヤーが近づくと逃げる機能。既定は OFF、ThreatEvaluator.fleeEnabled で ON
 - 状態に応じてアニメーションを切り替える(Idle/Walk/Eat/Sleep/Flee/Drink/Scratch ほか)
 - 性格(臆病さ/好奇心/活発さ/のんびりさ)で行動傾向が変わる
 - 複数匹を置いても、地点の占有(予約)で取り合いにならない
@@ -25,8 +27,10 @@ CreatureCore ── 参照キャッシュ + 単一 Tick ループ + 割込み指
   対応表      : CreatureActionCatalog(Goal⇔Need⇔PointType⇔Motion⇔表示名 の唯一の定義)
   ターゲット  : CreatureTargetSelector(Goal→地点を予約) / CreaturePointSensor / CreaturePointRegistry
   行動層      : ActionRunner(占有・回復・状態 AgentState・単一中断 AbortCurrent)
+  自由時間    : CreatureIdleBehavior(暇なときの所作を Needs+性格で選ぶ)
   身体制御    : MovementController(移動/徘徊/逃走) / CreatureLocomotion(障害物回避) / CreatureAnimator(状態→Animator)
-  反射・警戒  : ThreatEvaluator(危険検知)
+  視線        : CreatureGaze(近くの対象へ頭だけ向ける・行動は中断しない)
+  反射・警戒  : ThreatEvaluator(危険検知 / fleeEnabled で逃走 ON・OFF)
   性格        : CreaturePersonality(各層へ倍率を提供)
   ワールド    : CreaturePoint(餌・水・ベッド・爪とぎ等)
   表示(任意) : CreatureStatusDisplay / CreaturePointStatusDisplay / Billboard
@@ -68,10 +72,11 @@ docs/                            … 各フェーズと v1.0 の解説
 ```
 
 ## ドキュメント
-`docs/Phase1〜9` に各機能の詳細、`docs/v1.0_Review.md` に v1.0 の
+`docs/Phase1〜10` に各機能の詳細、`docs/v1.0_Review.md` に v1.0 の
 アーキテクチャ評価・拡張性・不足点、`docs/v1.1_AssetReady.md` に対応表の集約と
 「アセット/アニメ/地点/Action の追加手順」、`docs/Phase9_Locomotion.md` に
-障害物回避(CreatureLocomotion)の詳細をまとめてある。
+障害物回避、`docs/Phase10_Life.md` に自由時間・視線・危険回避の一時停止を
+まとめてある。
 
 ## 差し替え(自分のモデル/アニメ)
 - 見た目: Cat 直下の `Body`(仮のカプセル)を消して自分のモデルを置く。

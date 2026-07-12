@@ -40,6 +40,8 @@ namespace CreatureAI.EditorTools
             typeof(ThreatEvaluator),
             typeof(CreatureAnimator),
             typeof(CreatureActionCatalog),
+            typeof(CreatureIdleBehavior),
+            typeof(CreatureGaze),
             typeof(CreaturePersonality),
             typeof(CreatureStatusDisplay),
             typeof(CreaturePointStatusDisplay),
@@ -181,13 +183,26 @@ namespace CreatureAI.EditorTools
             AddUdonSharp<ThreatEvaluator>(cat);
             AddUdonSharp<CreatureAnimator>(cat);
             AddUdonSharp<CreatureActionCatalog>(cat); // Goal⇔Need⇔Point⇔Motion⇔Name の対応表
+            AddUdonSharp<CreatureIdleBehavior>(cat);  // 自由時間の所作
+            CreatureGaze catGaze = AddUdonSharp<CreatureGaze>(cat); // 視線
             AddUdonSharp<CreaturePersonality>(cat);
             AddUdonSharp<CreaturePointSensor>(cat);
 
             // 見える体(差し替え可能: この Body を消して好きなモデルを Cat の子に置けばよい)。
-            AddVisual(cat, "Body", PrimitiveType.Capsule,
+            GameObject body = AddVisual(cat, "Body", PrimitiveType.Capsule,
                 new Vector3(0f, 0.35f, 0f), new Vector3(0.35f, 0.35f, 0.35f),
                 new Color(0.95f, 0.6f, 0.2f));
+
+            // 視線が向く「頭」の仮オブジェクト(差し替えモデルでは頭ボーンを headTransform に割り当てる)。
+            GameObject head = AddVisual(body, "Head", PrimitiveType.Sphere,
+                new Vector3(0f, 0.55f, 0.18f), new Vector3(0.6f, 0.6f, 0.6f),
+                new Color(0.98f, 0.75f, 0.4f));
+            if (catGaze != null)
+            {
+                catGaze.headTransform = head.transform;
+                try { UdonSharpEditorUtility.CopyProxyToUdon(catGaze); } catch { }
+                EditorUtility.SetDirty(catGaze);
+            }
 
             // Animator と自動生成の AnimatorController を用意する(Cat ルートに1つ)。
             // CreatureAnimator.animator への明示割り当てはしない: 実行時に
@@ -620,6 +635,12 @@ namespace CreatureAI.EditorTools
                     MakeClip("Groom_ph", "localPosition.y", Bob(0.9f, 0.33f, 0.38f), true), row++);
                 BuildMotionState(sm, "Stretch", (int)MotionKind.Stretch,
                     MakeClip2("Stretch_ph", "localScale.z", Const(1.35f), "localPosition.y", Const(0.30f), true), row++);
+                BuildMotionState(sm, "Yawn", (int)MotionKind.Yawn,
+                    MakeClip("Yawn_ph", "localScale.y", Bob(1.4f, 0.35f, 0.45f), true), row++);
+                BuildMotionState(sm, "Sit", (int)MotionKind.Sit,
+                    MakeClip("Sit_ph", "localPosition.y", Const(0.22f), true), row++);
+                BuildMotionState(sm, "LookAround", (int)MotionKind.LookAround,
+                    MakeClip("LookAround_ph", "localRotation.y", Shake(2.2f, 0f, 0.18f), true), row++);
 
                 sm.defaultState = idle;
 
