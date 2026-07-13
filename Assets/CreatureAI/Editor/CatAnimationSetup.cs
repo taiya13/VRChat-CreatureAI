@@ -1,6 +1,8 @@
 #if UNITY_EDITOR
+using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -8,31 +10,25 @@ using UnityEngine;
 namespace CreatureAI.EditorTools
 {
     /// <summary>
-    /// 猫モデル(FBX)のインポート設定とAnimatorControllerを自動構築する。
+    /// 猫モデル(FBX)を「置いた場所を問わず」自動セットアップする。
     /// メニュー: CreatureAI > 5. 猫モデルをセットアップ (Import+Controller)
-    /// - 各クリップのループ設定
-    /// - テイク名 "Cat_12221_Rig|Cat_Walk" -> "Cat_Walk" へのリネーム
-    /// - int パラメータ "MotionState" (0-12, CreatureAnimator.parameterName と一致) で
-    ///   切り替わる AnimatorController を生成
     ///
-    /// [このメニューがやらないこと]
-    /// シーン上の Cat GameObject へのモデル取り付けは行わない(アセット生成のみ)。
-    /// 理由: 「2. テスト用の猫を作成」が作る仮の Body(カプセル)は差し替え可能な
-    /// プレースホルダで、既存の Cat 構成やユーザーの手作業を壊さずに自動着せ替えする
-    /// のは事故のリスクが高いため。取り付け手順は Models/README_CatModels.md 参照。
+    /// やること:
+    ///  1. プロジェクト内から Cat_12221 / Cat_12222 の .fbx を名前で探索
+    ///     (Assets 直下でも Models フォルダでも、どこでも見つける)
+    ///  2. インポート設定を Generic にし、全クリップをループ・名前正規化
+    ///     ("Cat_12221_Rig|Cat_Walk" -> "Cat_Walk")
+    ///  3. FBX と同じフォルダに <名前>_Animator.controller を生成
+    ///     int パラメータ "MotionState" (0-12, CreatureAnimator.parameterName と一致)
+    ///  4. シーン内の同名モデルインスタンスに Animator + Controller を自動割り当て
+    ///     (これで手動での Controller 割り当ては不要)
     /// </summary>
     public static class CatAnimationSetup
     {
-        const string ModelDir = "Assets/CreatureAI/Models";
-        const string OutDir = "Assets/CreatureAI/Animations";
+        // 対象モデルのベース名。増えたらここに足すだけ。
+        static readonly string[] BaseNames = { "Cat_12221", "Cat_12222" };
 
-        static readonly string[] Models =
-        {
-            ModelDir + "/Cat_12221.fbx",
-            ModelDir + "/Cat_12222.fbx",
-        };
-
-        // CreatureAnimator.MotionKind と値を一致させる対応表 (Idle=0 ... LookAround=12)
+        // CreatureAnimator の MotionKind と値を一致させる対応表 (Idle=0 ... LookAround=12)
         static readonly (string clip, int state)[] StateMap =
         {
             ("Cat_Idle", 0),
@@ -53,104 +49,160 @@ namespace CreatureAI.EditorTools
         [MenuItem("CreatureAI/5. 猫モデルをセットアップ (Import+Controller)", false, 5)]
         public static void Setup()
         {
-            foreach (var model in Models)
+            StringBuilder report = new StringBuilder();
+            int ok = 0;
+
+            foreach (string baseName in BaseNames)
             {
-                if (!File.Exists(model))
+                string fbx = FindFbx(baseName);
+                if (fbx == null)
                 {
-                    Debug.LogWarning($"[CreatureAI] model not found: {model}");
+                    report.Append("・").Append(baseName)
+                          .Append(".fbx が見つかりません(未インポート?)\n");
                     continue;
                 }
-                ConfigureImporter(model);
+
+                ConfigureImporter(fbx);
+                AnimatorController ctrl = BuildController(fbx, baseName);
+                if (ctrl == null)
+                {
+                    report.Append("・").Append(baseName)
+                          .Append(": Controller 生成に失敗(Console参照)\n");
+                    continue;
+                }
+
+                int assigned = AssignInScene(baseName, ctrl);
+                report.Append("・").Append(baseName)
+                      .Append(": Controller作成OK → シーンの ").Append(assigned)
+                      .Append(" 体に自動割り当て").Append(assigned == 0 ? "(シーンに未配置)" : "").Append("\n");
+                ok++;
             }
-            AssetDatabase.Refresh();
-            foreach (var model in Models)
-            {
-                if (File.Exists(model))
-                    BuildController(model);
-            }
+
             AssetDatabase.SaveAssets();
-            Debug.Log("[CreatureAI] Cat animation setup complete.");
-            EditorUtility.DisplayDialog("CreatureAI",
-                "猫モデルのインポート設定と AnimatorController(" + OutDir + ") を作成しました。\n\n" +
-                "▶ 次の手順(手動):\n" +
-                "1. Cat の子にある仮の Body(カプセル)を削除\n" +
-                "2. Models/Cat_12221(または12222).fbx をシーンへドラッグし、Cat の子にする\n" +
-                "3. そのモデルの Animator の Controller に、いま生成した\n" +
-                "   Cat_12221_Animator(または12222) を割り当てる\n" +
-                "4. (任意) CreatureGaze の headTransform を、モデル内の Head ボーンに差し替え\n\n" +
-                "詳細は Models/README_CatModels.md を参照してください。", "OK");
+            AssetDatabase.Refresh();
+
+            string head = ok > 0 ? "セットアップ完了:\n\n" : "モデルが見つかりませんでした:\n\n";
+            string tail = ok > 0
+                ? "\n▶ Play して Console に『[Animator] … 反映先 n件』(n≥1) が出れば成功です。\n" +
+                  "シーンにまだ猫モデルを置いていない場合は、Project から\n" +
+                  "Cat_12221 / Cat_12222 を Cat の子にドラッグしてから、もう一度この\n" +
+                  "メニューを実行すれば Controller が自動で付きます。"
+                : "Cat_12221.fbx / Cat_12222.fbx をプロジェクトに取り込んでから再実行してください。";
+            EditorUtility.DisplayDialog("CreatureAI 猫セットアップ", head + report + tail, "OK");
+            Debug.Log("[CreatureAI] 猫セットアップ: " + report.ToString().Replace("\n", " / "));
+        }
+
+        /// <summary>ベース名の .fbx をプロジェクト全体から探す(置き場所を問わない)。</summary>
+        static string FindFbx(string baseName)
+        {
+            foreach (string guid in AssetDatabase.FindAssets(baseName + " t:Model"))
+            {
+                string p = AssetDatabase.GUIDToAssetPath(guid);
+                if (p.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase) &&
+                    Path.GetFileNameWithoutExtension(p) == baseName)
+                    return p;
+            }
+            return null;
         }
 
         static void ConfigureImporter(string path)
         {
-            var importer = (ModelImporter)AssetImporter.GetAtPath(path);
+            ModelImporter importer = (ModelImporter)AssetImporter.GetAtPath(path);
             importer.animationType = ModelImporterAnimationType.Generic;
             importer.importAnimation = true;
 
-            var clips = importer.defaultClipAnimations;
-            foreach (var clip in clips)
+            ModelImporterClipAnimation[] clips = importer.defaultClipAnimations;
+            for (int i = 0; i < clips.Length; i++)
             {
-                int bar = clip.name.IndexOf('|');
-                if (bar >= 0)
-                    clip.name = clip.name.Substring(bar + 1);
-                clip.loopTime = true; // 全クリップともループ前提で作成済み
+                int bar = clips[i].name.IndexOf('|');
+                if (bar >= 0) clips[i].name = clips[i].name.Substring(bar + 1);
+                clips[i].loopTime = true; // 全クリップともループ前提で作成済み
             }
             importer.clipAnimations = clips;
             importer.SaveAndReimport();
-            Debug.Log($"[CreatureAI] importer configured: {path} ({clips.Length} clips)");
+            Debug.Log("[CreatureAI] インポート設定: " + path + " (" + clips.Length + " clips, Generic)");
         }
 
-        static void BuildController(string modelPath)
+        static AnimatorController BuildController(string fbxPath, string baseName)
         {
-            string baseName = Path.GetFileNameWithoutExtension(modelPath);
-            if (!Directory.Exists(OutDir))
-                Directory.CreateDirectory(OutDir);
-            string ctrlPath = $"{OutDir}/{baseName}_Animator.controller";
+            string dir = Path.GetDirectoryName(fbxPath).Replace("\\", "/");
+            string ctrlPath = dir + "/" + baseName + "_Animator.controller";
 
-            var existing = AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath);
-            if (existing != null)
+            if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ctrlPath) != null)
                 AssetDatabase.DeleteAsset(ctrlPath);
 
-            var ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
+            AnimatorController ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
             ctrl.AddParameter("MotionState", AnimatorControllerParameterType.Int);
-            var sm = ctrl.layers[0].stateMachine;
+            AnimatorStateMachine sm = ctrl.layers[0].stateMachine;
 
-            var clips = AssetDatabase.LoadAllAssetsAtPath(modelPath)
+            var clips = AssetDatabase.LoadAllAssetsAtPath(fbxPath)
                 .OfType<AnimationClip>()
                 .Where(c => !c.name.StartsWith("__preview"))
-                .GroupBy(c => CleanName(c.name))
+                .GroupBy(CleanName)
                 .ToDictionary(g => g.Key, g => g.First());
 
-            foreach (var (clipName, stateIdx) in StateMap)
+            int found = 0;
+            foreach ((string clipName, int stateIdx) in StateMap)
             {
-                if (!clips.TryGetValue(clipName, out var clip))
+                if (!clips.TryGetValue(clipName, out AnimationClip clip))
                 {
-                    Debug.LogWarning($"[CreatureAI] clip missing in {modelPath}: {clipName}");
+                    Debug.LogWarning("[CreatureAI] クリップが無い(" + baseName + "): " + clipName);
                     continue;
                 }
-                var state = sm.AddState(clipName.Replace("Cat_", ""),
+                AnimatorState st = sm.AddState(clipName.Replace("Cat_", ""),
                     new Vector3(360f, 60f * stateIdx, 0f));
-                state.motion = clip;
+                st.motion = clip;
+                st.writeDefaultValues = true;
 
-                var tr = sm.AddAnyStateTransition(state);
+                AnimatorStateTransition tr = sm.AddAnyStateTransition(st);
                 tr.hasExitTime = false;
                 tr.hasFixedDuration = true;
-                tr.duration = 0.25f;
+                tr.duration = 0.2f;
                 tr.canTransitionToSelf = false;
                 tr.AddCondition(AnimatorConditionMode.Equals, stateIdx, "MotionState");
 
-                if (stateIdx == 0)
-                    sm.defaultState = state;
+                if (stateIdx == 0) sm.defaultState = st;
+                found++;
             }
 
             EditorUtility.SetDirty(ctrl);
-            Debug.Log($"[CreatureAI] controller built: {ctrlPath}");
+            Debug.Log("[CreatureAI] Controller生成: " + ctrlPath + " (" + found + "/13 states)");
+            return ctrl;
         }
 
-        static string CleanName(string name)
+        /// <summary>
+        /// シーン内の「モデルのルート(名前=baseName、親が同名でない側)」に Animator を付け、
+        /// Controller を割り当てる。CreatureAnimator が配下の Animator を自動検出するので、
+        /// これでモーションが AI と繋がる。
+        /// </summary>
+        static int AssignInScene(string baseName, AnimatorController ctrl)
         {
-            int bar = name.IndexOf('|');
-            return bar >= 0 ? name.Substring(bar + 1) : name;
+            int n = 0;
+#if UNITY_2020_1_OR_NEWER
+            GameObject[] all = UnityEngine.Object.FindObjectsOfType<GameObject>(true);
+#else
+            GameObject[] all = UnityEngine.Object.FindObjectsOfType<GameObject>();
+#endif
+            foreach (GameObject go in all)
+            {
+                if (go.name != baseName) continue;
+                // 内側(メッシュ子)ではなくモデルのルートだけを対象にする。
+                if (go.transform.parent != null && go.transform.parent.name == baseName) continue;
+
+                Animator anim = go.GetComponent<Animator>();
+                if (anim == null) anim = Undo.AddComponent<Animator>(go);
+                anim.applyRootMotion = false;
+                anim.runtimeAnimatorController = ctrl;
+                EditorUtility.SetDirty(anim);
+                n++;
+            }
+            return n;
+        }
+
+        static string CleanName(AnimationClip c)
+        {
+            int bar = c.name.IndexOf('|');
+            return bar >= 0 ? c.name.Substring(bar + 1) : c.name;
         }
     }
 }
