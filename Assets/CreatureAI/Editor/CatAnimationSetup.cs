@@ -12,7 +12,8 @@ namespace CreatureAI.EditorTools
     /// メニュー: CreatureAI > Setup Cat Animations
     /// - 各クリップのループ設定
     /// - テイク名 "Cat_12221_Rig|Cat_Walk" -> "Cat_Walk" へのリネーム
-    /// - int パラメータ "State" (0-12) で切り替わる AnimatorController を生成
+    /// - int パラメータ "MotionState" (0-12, CreatureAnimator.parameterName と一致) で
+    ///   切り替わる AnimatorController を生成
     /// </summary>
     public static class CatAnimationSetup
     {
@@ -25,7 +26,7 @@ namespace CreatureAI.EditorTools
             ModelDir + "/Cat_12222.fbx",
         };
 
-        // CreatureAnimator が SetInteger("State", n) で使う対応表
+        // CreatureAnimator.MotionKind と値を一致させる対応表 (Idle=0 ... LookAround=12)
         static readonly (string clip, int state)[] StateMap =
         {
             ("Cat_Idle", 0),
@@ -96,7 +97,7 @@ namespace CreatureAI.EditorTools
                 AssetDatabase.DeleteAsset(ctrlPath);
 
             var ctrl = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
-            ctrl.AddParameter("State", AnimatorControllerParameterType.Int);
+            ctrl.AddParameter("MotionState", AnimatorControllerParameterType.Int);
             var sm = ctrl.layers[0].stateMachine;
 
             var clips = AssetDatabase.LoadAllAssetsAtPath(modelPath)
@@ -121,7 +122,7 @@ namespace CreatureAI.EditorTools
                 tr.hasFixedDuration = true;
                 tr.duration = 0.25f;
                 tr.canTransitionToSelf = false;
-                tr.AddCondition(AnimatorConditionMode.Equals, stateIdx, "State");
+                tr.AddCondition(AnimatorConditionMode.Equals, stateIdx, "MotionState");
 
                 if (stateIdx == 0)
                     sm.defaultState = state;
