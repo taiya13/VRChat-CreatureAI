@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UdonSharp;
 using UdonSharpEditor;
 using UnityEditor;
@@ -195,6 +196,158 @@ namespace CreatureAI.EditorTools
                 "各ポイント上に Free/Reserved/Occupied が表示されます。\n" +
                 "Console に [Target]/[Move arrived] ログが出れば Phase 4 成功です。\n\n" +
                 "※ Body / Mesh は差し替え可能(消して好きなモデルを置けます)。", "OK");
+        }
+
+        // ================= メニュー 6: 完全リビルド(修復) =================
+
+        [MenuItem("CreatureAI/6. 完全リビルド (修復)", false, 6)]
+        public static void FullRebuild()
+        {
+            Debug.Log("===== CreatureAI 完全リビルド開始 =====");
+
+            // ① C# コンパイル状態を確認
+            if (EditorApplication.isCompiling)
+            {
+                EditorUtility.DisplayDialog("CreatureAI Setup",
+                    "C# が現在コンパイル中です。完了してからもう一度実行してください。", "OK");
+                return;
+            }
+
+            // ② 重複インストールを検出
+            List<string> duplicates = FindDuplicateInstalls();
+            if (duplicates.Count > 0)
+            {
+                EditorUtility.DisplayDialog("CreatureAI Setup",
+                    "★重複インストールを検出しました★\n\n以下のフォルダが複数存在します:\n\n" +
+                    string.Join("\n", duplicates) +
+                    "\n\n1つのフォルダだけを残して、他のフォルダをすべて削除してください。\n" +
+                    "その後、もう一度このメニューを実行してください。", "OK");
+                return;
+            }
+
+            // ③ 壊れアセットを掃除
+            int cleaned = CleanupBrokenProgramAssets(true);
+            Debug.Log("[Complete Rebuild] 壊れアセット削除: " + cleaned + " 個");
+
+            // ④ Program Asset を確保(無ければ作成、古ければ修復)
+            int created = 0, repaired = 0, ok = 0, failed = 0;
+            foreach (Type t in BehaviourTypes)
+            {
+                MonoScript script = FindScript(t);
+                if (script == null)
+                {
+                    Debug.LogError("[Complete Rebuild] .cs が見つからない: " + t.Name);
+                    failed++;
+                    continue;
+                }
+
+                string path = PathFor(t);
+                UdonSharpProgramAsset pa = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(path);
+                if (pa == null)
+                {
+                    if (!AssetDatabase.IsValidFolder(ProgramAssetFolder))
+                        AssetDatabase.CreateFolder("Assets", "CreatureAI_ProgramAssets");
+                    pa = ScriptableObject.CreateInstance<UdonSharpProgramAsset>();
+                    pa.sourceCsScript = script;
+                    AssetDatabase.CreateAsset(pa, path);
+                    created++;
+                }
+                else if (pa.sourceCsScript == null || pa.sourceCsScript != script)
+                {
+                    pa.sourceCsScript = script;
+                    EditorUtility.SetDirty(pa);
+                    repaired++;
+                }
+                else ok++;
+            }
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            UdonSharpProgramAsset.CompileAllCsPrograms(true);
+            Debug.Log("[Complete Rebuild] Program Asset: 新規 " + created + " / 修復 " + repaired + " / OK " + ok + " / 失敗 " + failed);
+
+            // ⑤ シーン内の既存 CreatureAI オブジェクトを削除
+            GameObject catOld = GameObject.Find("Cat");
+            if (catOld != null)
+            {
+                Debug.Log("[Complete Rebuild] 既存 Cat を削除");
+                DestroyImmediate(catOld);
+            }
+            GameObject registryOld = GameObject.Find("__CatAI_Registry");
+            if (registryOld != null)
+            {
+                Debug.Log("[Complete Rebuild] 既存 __CatAI_Registry を削除");
+                DestroyImmediate(registryOld);
+            }
+
+            // ⑥ 新しいシーンオブジェクトを構築(テスト用の猫を作成と同じ)
+            CreateTestSceneObjects();
+            Debug.Log("===== CreatureAI 完全リビルド終了 =====");
+        }
+
+        // ================= メニュー 7: 診断(強化版) =================
+
+        [MenuItem("CreatureAI/7. 詳細診断 (エラー検出)", false, 7)]
+        public static void DiagnoseScene()
+        {
+            Debug.Log("===== CreatureAI 詳細診断開始 =====");
+
+            // ① C# コンパイル状態
+            if (EditorApplication.isCompiling)
+            {
+                Debug.LogWarning("[診断] ★ C# が現在コンパイル中。コンパイル完了後に診断してください。");
+            }
+            else
+            {
+                Debug.Log("[診断] C# コンパイル: OK");
+            }
+
+            // ② 重複インストール
+            List<string> duplicates = FindDuplicateInstalls();
+            if (duplicates.Count > 0)
+            {
+                Debug.LogError("[診断] ★重複インストール: " + string.Join(" / ", duplicates));
+            }
+            else
+            {
+                Debug.Log("[診断] インストール: 単一 OK");
+            }
+
+            // ③ Program Asset 状態
+            foreach (Type t in BehaviourTypes)
+            {
+                MonoScript script = FindScript(t);
+                string scriptState = script != null ? "OK" : "★見つからない★";
+                UdonSharpProgramAsset pa = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(PathFor(t));
+                string paState = pa == null ? "★無し★"
+                    : (pa.sourceCsScript == null ? "★source=None★" : "OK");
+                Debug.Log("[" + t.Name + "] .cs=" + scriptState + " / ProgramAsset=" + paState);
+            }
+
+            // ④ シーン内の Missing Scripts
+            foreach (GameObject go in Resources.FindObjectsOfTypeAll<GameObject>())
+            {
+                if (go.hideFlags != HideFlags.None) continue;
+                Component[] comps = go.GetComponents<Component>();
+                foreach (Component c in comps)
+                {
+                    if (c == null)
+                    {
+                        Debug.LogError("[診断] Missing Script: " + go.name + " (" + AssetDatabase.GetAssetPath(go.gameObject) + ")");
+                    }
+                }
+            }
+
+            // ⑤ シーン内の壊れた Udon(source が無いか SerializedProgramAsset が無い)
+            UdonBehaviour[] udons = Resources.FindObjectsOfTypeAll<UdonBehaviour>();
+            foreach (UdonBehaviour ub in udons)
+            {
+                if (ub.programSource == null)
+                    Debug.LogError("[診断] Udon 破損: " + ub.gameObject.name + " (programSource=null)");
+                else if (!HasSerializedProgram(ub.programSource))
+                    Debug.LogError("[診断] Udon 未コンパイル: " + ub.gameObject.name + " (SerializedProgramAsset 無し)");
+            }
+
+            Debug.Log("===== CreatureAI 詳細診断終了 =====");
         }
 
         // ================= メニュー 9: 壊れアセット掃除(単体) =================
@@ -431,6 +584,32 @@ namespace CreatureAI.EditorTools
                 }
             }
             return null;
+        }
+
+        /// <summary>重複インストール(複数の CreatureCore.cs)を検出。パスのリストを返す。</summary>
+        private static List<string> FindDuplicateInstalls()
+        {
+            var paths = new List<string>();
+            foreach (string guid in AssetDatabase.FindAssets("CreatureCore t:MonoScript"))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.Contains("CreatureAI") && path.EndsWith("CreatureCore.cs", StringComparison.Ordinal))
+                {
+                    paths.Add(path);
+                }
+            }
+            return paths;
+        }
+
+        /// <summary>UdonSharpProgramAsset が SerializedProgramAsset を持っているか確認(コンパイル済みか)。</summary>
+        private static bool HasSerializedProgram(UdonSharpProgramAsset programSource)
+        {
+            if (programSource == null) return false;
+            var prop = typeof(UdonSharpProgramAsset).GetProperty("SerializedProgramAsset",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (prop == null) return true; // プロパティが無ければ古いバージョン、スキップ
+            var val = prop.GetValue(programSource);
+            return val != null;
         }
     }
 }
