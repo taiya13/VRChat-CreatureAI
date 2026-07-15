@@ -44,6 +44,7 @@ namespace CreatureAI.EditorTools
             ("Cat_Yawn", 10),
             ("Cat_Sit", 11),
             ("Cat_LookAround", 12),
+            ("Cat_Pet", 13),   // 撫でられ反応(プレイヤーの接触で SetInteger("MotionState",13))
         };
 
         [MenuItem("CreatureAI/5. 猫モデルをセットアップ (Import+Controller)", false, 5)]

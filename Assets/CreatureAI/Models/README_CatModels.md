@@ -56,6 +56,16 @@ FBXにはテクスチャ画像は含まれていません。元素材のJPGを�
 | 10 | Cat_Yawn | あくび（頭上げ＋口開け→戻る） | 2.2s | ○ |
 | 11 | Cat_Sit | お座り（尻尾巻き・微動） | 6.7s | ○ |
 | 12 | Cat_LookAround | 周囲を見回す（左→右→戻る） | 5.3s | ○ |
+| 13 | Cat_Pet | 撫でられ反応（頭を上げて手にすり寄せ・尻尾を立てて左右・ゴロゴロ） | 4.0s | ○ |
+
+### 撫でられ反応（Cat_Pet, MotionState=13）の使い方
+
+これはAIの自動行動ではなく、**プレイヤーが猫に触れたとき**に再生する用です。
+VRChat側で、猫に触れたことを検知するスクリプト（例: `VRC_Trigger` の OnPlayerTriggerEnter、
+または当たり判定用の Collider + Udon）から `animator.SetInteger("MotionState", 13)` を呼び、
+離れたら `0`（待機）に戻す、という繋ぎ方をします。既存の `CreatureAnimator` は AI の状態から
+MotionState を毎フレーム上書きするので、撫で優先にしたい場合は触れている間だけ
+`CreatureAnimator` を無効化するか、撫で状態を最優先に割り込ませてください。
 
 - すべて **その場（in-place）** アニメーション。移動はスクリプト側でTransformを動かす前提
 - StretchとYawnはループ可能だが実質ワンショット演出（開始・終了が待機姿勢に一致）
