@@ -39,6 +39,18 @@ namespace CreatureAI
         [Tooltip("占有タイムアウト秒数(仕様 3.5節)。")]
         public float reserveTimeout = 10.0f;
 
+        [Header("起動時のばらつき(生活感)")]
+        [Tooltip("ON にすると、起動時に各欲求を 0 ではなくランダムな値から始める。" +
+                 "複数の猫が『同時に同じ行動をする』のを防ぎ、それぞれ生活の途中から" +
+                 "始まったように見せる。個体ごとに位相がばらけて自然になる。")]
+        public bool randomizeStartNeeds = true;
+
+        [Tooltip("起動時のランダム初期値の上限(しきい値に対する割合、0〜1)。" +
+                 "例: 0.85 なら『しきい値の 0〜85%』の間でランダムに始まる。" +
+                 "大きいほど『起動直後にすぐ何か行動する猫』が出やすい。")]
+        [Range(0f, 1f)]
+        public float startNeedsMaxFraction = 0.85f;
+
         // ================= アクセサ(範囲外は既定値を返す = Need 追加に強い) =================
 
         public float GetIncreaseRate(NeedType t) { return GetAt(increaseRate, (int)t, 0f); }

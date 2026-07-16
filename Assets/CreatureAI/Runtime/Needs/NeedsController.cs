@@ -30,6 +30,33 @@ namespace CreatureAI
             actionRunner = runner;
             personality = GetComponent<CreaturePersonality>(); // 活発さで増加速度が変わる
             lastGrowTime = Time.time;
+            SeedStartNeeds();
+        }
+
+        /// <summary>
+        /// 起動時に各欲求を 0 ではなくランダムな値から始める(生活感 / 個体差)。
+        /// 全員が 0 から始まると「2匹が同時に空腹→同時に餌へ」のように足並みが
+        /// 揃ってロボット的に見える。各欲求を「その欲求のしきい値 × 0〜maxFraction」の
+        /// 範囲でばらけさせることで、それぞれ生活の途中から始まったように見せる。
+        /// しきい値ぴったりでは始めない(起動直後に全員が即行動しないように上限を掛ける)。
+        /// </summary>
+        private void SeedStartNeeds()
+        {
+            if (needsData == null || profile == null) return;
+            if (!profile.randomizeStartNeeds) return;
+
+            float frac = profile.startNeedsMaxFraction;
+            if (frac <= 0f) return;
+
+            int count = needsData.GetNeedCount();
+            for (int i = 0; i < count; i++)
+            {
+                NeedType nt = (NeedType)i;
+                // 増えない欲求(increaseRate=0)は行き場が無いので 0 のままにする。
+                if (profile.GetIncreaseRate(nt) == 0f) continue;
+                float th = profile.GetThreshold(nt);
+                needsData.SetValue(nt, Random.Range(0f, th * frac));
+            }
         }
 
         /// <summary>欲求を実時間ぶん増加させる(低頻度 Tick から呼ばれる)。</summary>
